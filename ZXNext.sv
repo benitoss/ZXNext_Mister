@@ -128,6 +128,8 @@ module emu
 assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
+//assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
+//assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;  
 
 assign AUDIO_S = 0;  // 1 - signed audio samples, 0 - unsigned
@@ -297,6 +299,33 @@ wire        ram_ready;
 //	.ready(ram_ready)
 //);
 
+// RAM
+//	ssdram256Mb #( 
+//	  .freq_g (112)
+//	) sdram (  
+//	  .clock_i     (clk_mem),
+//	  .reset_i	   (reset),
+//	  .refresh_i   (1'b1),
+//	  // Static RAM bus
+//	  .addr_i      ({4'b0, ram_addr}),
+//	  .data_i      (ram_din),
+//	  .data_o	   (rab_dout),
+//	  .cs_i		   (ram_cs),
+//	  .oe_i		   (ram_rd),
+//	  .we_i		   (ram_we),
+//	  // SD-RAM ports
+//	  .mem_cke_o	(SDRAM_CKE),
+//	  .mem_cs_n_o	(SDRAM_nCS),
+//	  .mem_ras_n_o (SDRAM_nRAS),
+//	  .mem_cas_n_o (SDRAM_nCAS),
+//	  .mem_we_n_o  (SDRAM_nWE),
+//	  .mem_udq_o   (SDRAM_DQMH),
+//	  .mem_ldq_o   (SDRAM_DQML),
+//	  .mem_ba_o    (SDRAM_BA),
+//	  .mem_addr_o  (SDRAM_A),
+//	  .mem_data_io (SDRAM_DQ)
+//	);
+
 
 // BRAM manual implementation //////////////////////////////////////////////////
 reg        reset = 0;
@@ -381,15 +410,19 @@ ZXNEXT_Mister  ZXNEXT_Mister
 
 );
 
-//////////////// Video  //////////////////
+///////////////////////////////////////////////////
 
 assign CLK_VIDEO = CLK_56;
+//assign CE_PIXEL = 1;
 
 wire [2:0] scale = status[6:5];
 wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
+//wire       scandoubler = scale || forced_scandoubler;
 
 assign VGA_F1 = 0;
 assign VGA_SL = sl[1:0];
+//assign CE_PIXEL = scandoubler ? ce_pix_out : ce_pix2;
+
 
 wire hs, vs;
 wire HBlank;
@@ -404,8 +437,8 @@ wire [2:0] rgb_b;
 
 assign HSync = hs;
 assign VSync = vs;
-assign Gx  = {rgb_r,rgb_r,rgb_r[2:1]};
-assign Rx  = {rgb_g,rgb_g,rgb_g[2:1]};
+assign Rx  = {rgb_r,rgb_r,rgb_r[2:1]};
+assign Gx  = {rgb_g,rgb_g,rgb_g[2:1]};
 assign Bx  = {rgb_b,rgb_b,rgb_b[2:1]};
 
 wire ce_sys = CLK_7;
@@ -482,7 +515,7 @@ always @(posedge clk_sys) begin
 	if((old_mosi ^ sdmosi) || (old_miso ^ sdmiso)) timeout <= 0;
 end
 
-/////////  EAR /////////////////////////
+/////////  EAR added by Fernando Mosquera
 
 wire tape_in;
 wire tape_adc, tape_adc_act;
