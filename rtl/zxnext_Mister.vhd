@@ -1364,8 +1364,8 @@ begin
    
    -- make sure xst is pushing registers into io blocks
    
-	SRAM_A <= "00" & sram_addr_active(18 downto 0);  -- <----------------------------- 512 kb--------------
-   --SRAM_A <= sram_addr_active(20 downto 0);  -- <----------------------------- 2 MB--------------
+	--SRAM_A <= "00" & sram_addr_active(18 downto 0);  -- <----------------------------- 512 kb--------------
+   SRAM_A <= sram_addr_active(20 downto 0);  -- <----------------------------- 2 MB--------------
    ram_oe_n_o <= sram_oe_n_active;
    ram_ce_n_o <= sram_cs_n_active;
 --   ram1_oe_n_o<= sram_oe_n_active;

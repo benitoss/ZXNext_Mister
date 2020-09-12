@@ -285,7 +285,6 @@ wire  SRAM_nCE, SRAM_nOE, SRAM_nWE;
 
 Mister_sRam sRam
 ( .*,
-  //.SDRAM_nCS   (1),
   .SRAM_A               (SRAM_A),
   .SRAM_DQ              (SRAM_DQ),
   .SRAM_nCE    (SRAM_nCE),
