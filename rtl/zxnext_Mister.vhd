@@ -34,7 +34,7 @@ entity ZXNEXT_Mister is
    generic (
 		
 --		usar_sdram			: boolean	:= false ;
---		ramsize_g		   : integer	:= 512;	     -- 512, 1024, 1536 or 2048
+		ramsize_g		   : integer	:= 2048;	     -- 512, 1024, 1536 or 2048
 	
       g_machine_id      : unsigned(7 downto 0)  := X"DA";   -- Mister Version 
       g_version         : unsigned(7 downto 0)  := X"31";   -- 3.01
@@ -53,18 +53,20 @@ entity ZXNEXT_Mister is
 		LED					: out   std_logic                      := '1';
 		
 		
-		ram_addr				: out   std_logic_vector(20 downto 0)  := (others => '0');
-		ram_din				: out   std_logic_vector(7 downto 0)   := (others => 'Z');
-		ram_we				: out   std_logic                      := '1'; 
-		ram_rd            : out   std_logic                      := '1'; 
-		ram_dout				: in    std_logic_vector(7 downto 0)   := (others => 'Z');
-		ram_cs            : out   std_logic                      := '1'; 
-		
+--		ram_addr				: out   std_logic_vector(20 downto 0)  := (others => '0');
+--		ram_din				: out   std_logic_vector(7 downto 0)   := (others => 'Z');
+--		ram_we				: out   std_logic                      := '1'; 
+--		ram_rd            : out   std_logic                      := '1'; 
+--		ram_dout				: in    std_logic_vector(7 downto 0)   := (others => 'Z');
+--		ram_cs            : out   std_logic                      := '1'; 
+	
       -- SRAM (AS7C34096)
 	  
---	  ram_addr_o         : out   std_logic_vector(20 downto 0)  := (others => '0');
---	  ram_data_io_mister : inout std_logic_vector(7 downto 0)  := (others => 'Z');
---	  ram_we_n_o         : out   std_logic                      := '1'; 
+	  SRAM_A             : out   std_logic_vector(20 downto 0)  := (others => '0');
+	  SRAM_DQ            : inout std_logic_vector(7 downto 0)  := (others => 'Z');
+	  SRAM_nWE           : out   std_logic                      := '1'; 
+	  SRAM_nOE           : out   std_logic                      := '0'; 
+	  SRAM_nCE           : out   std_logic                      := '0';
 	  
 	  -- SDRAM	(H57V256 = 16Mx16 = 32MB)
 --      sdram_clk_o			: out   std_logic								:= '0';
@@ -235,9 +237,9 @@ architecture rtl of ZXNEXT_Mister is
    signal joy_count              : unsigned(7 downto 0) := X"00";      -- For ZXDOS JOY  
    ----------------------------------------------------------------------------------
       -- using SDRAM
-    signal ram_addr_o             :std_logic_vector(20 downto 0) := (others => '0'); 
+--    signal SRAM_A             :std_logic_vector(20 downto 0) := (others => '0'); 
 --   signal ram_data_io_zxdos      :std_logic_vector(7 downto 0)  := (others => 'Z');
-   signal ram_we_n_o			      : std_logic;
+--   signal ram_we_n_o			      : std_logic;
 	signal ram1_oe_n_o			   : std_logic;
 	signal ram1_ce_n_o			   : std_logic;
 	
@@ -421,7 +423,7 @@ architecture rtl of ZXNEXT_Mister is
    signal ram_ce_n_o             : std_logic;
    
 	
-	signal sram_we_n_o             : std_logic                      := '1';
+	signal ram_we_n_o             : std_logic                      := '1';
    signal sram_addr_active_goma2 : std_logic_vector(20 downto 0)  := (others => '0');
 		
 	signal audioint_o             : std_logic                      := '1';
@@ -1177,7 +1179,7 @@ begin
    
    -- SRAM I/O PINS:
    --
-   -- ram_addr_o       : std_logic_vector(18 downto 0)
+   -- SRAM_A       : std_logic_vector(18 downto 0)
    -- ram_data_io      : std_logic_vector(15 downto 0)
    -- ram_oe_n_o
    -- ram_we_n_o
@@ -1194,7 +1196,7 @@ begin
 --	port map (
 --    clk_i  => CLK_28,
 --    we_i   => not ram_we_n_o,
---	 addr_i => ram_addr_o(17 downto 0),
+--	 addr_i => SRAM_A(17 downto 0),
 --    data_i => ram_data_output,
 --    data_o => ram_data_input
 --   ); 
@@ -1204,23 +1206,25 @@ begin
 --	begin
 --		if rising_edge(CLK_28) then
 ----			if (reset = '0') then
-------				ram_q(ram_addr_o(19 downto 0)) <= (others => (others => '1'));
+------				ram_q(SRAM_A(19 downto 0)) <= (others => (others => '1'));
 ----			else 
 --			if (ram_we_n_o = '0' and sram_cs_n_active = '0') then
---				ram_q(to_integer(unsigned (ram_addr_o(19 downto 0)))) <= ram_data_output;
+--				ram_q(to_integer(unsigned (SRAM_A(19 downto 0)))) <= ram_data_output;
 --			end if;
---			ram_data_input <= ram_q(to_integer(unsigned (ram_addr_o(19 downto 0))));
+--			ram_data_input <= ram_q(to_integer(unsigned (SRAM_A(19 downto 0))));
 --		end if;
 --	end process;
 	
 	
  
-  ram_addr <= ram_addr_o(20 downto 0);
-  ram_din <= ram_data_output;
-  ram_data_input <= ram_dout;
-  ram_rd <= not sram_oe_n_active;
-  ram_we <= not ram_we_n_o;
-  ram_cs <= not sram_cs_n_active;
+--  ram_addr <= SRAM_A(20 downto 0);
+--  ram_din <= ram_data_output;
+--  ram_data_input <= ram_dout;
+--  ram_rd <= not sram_oe_n_active;
+----  ram_rd <= ram_we_n_o;
+--  ram_we <= not ram_we_n_o;
+--  ram_cs <= not sram_cs_n_active;
+ 
 	
    -- Determine active port and sram signals for next memory cycle
    
@@ -1239,25 +1243,22 @@ begin
    end process;
 
 	
-	
-	
    -- Select active sram chip
    
    process (zxn_ram_a_req, zxn_ram_b_req, sram_addr)
    begin
       if (zxn_ram_a_req = '1' or zxn_ram_b_req = '1') then
---       	case sram_addr(20 downto 19) is
---            when "00"   =>  sram_cs_n <= '0';
---            when "01"   =>  sram_cs_n <= '1';
---            when "10"   =>  sram_cs_n <= '1';
---            when others =>  sram_cs_n <= '1';
---			end case; 
---				if sram_addr(20 downto 18) = "000" then 
---					sram_cs_n <= '0';
---				else 
---					sram_cs_n <= '1';
---				end if;
-      		sram_cs_n <= '0';
+		      -- 512 Kb 
+       	case sram_addr(19) is
+            when '0'   =>  sram_cs_n <= '0';
+            when others =>  sram_cs_n <= '1';
+         end case; 
+
+			
+			
+            -- 2 MB
+--           sram_cs_n <= '0';
+
       else
          sram_cs_n <= '1';			
       end if;
@@ -1347,10 +1348,10 @@ begin
    begin
       if rising_edge(CLK_56) then
          if sram_oe_n_active = '1' and sram_we_intit = '0' then
-            sram_we_n_o   <= '0';
+            ram_we_n_o   <= '0';
 				sram_we_intit<= '1';	
 			elsif sram_we_intit = '1' then
-				sram_we_n_o   <= '1';
+				ram_we_n_o   <= '1';
 				sram_we_intit<= '0';
 		   end if;
 					
@@ -1363,26 +1364,34 @@ begin
    
    -- make sure xst is pushing registers into io blocks
    
-   ram_addr_o <= sram_addr_active(20 downto 0);  -- <----------------------------- here you define 512 Kb or 2 MB--------------
+	SRAM_A <= "00" & sram_addr_active(18 downto 0);  -- <----------------------------- 512 kb--------------
+   --SRAM_A <= sram_addr_active(20 downto 0);  -- <----------------------------- 2 MB--------------
    ram_oe_n_o <= sram_oe_n_active;
    ram_ce_n_o <= sram_cs_n_active;
-   
+--   ram1_oe_n_o<= sram_oe_n_active;
+--	  ram1_ce_n_o<= sram_cs_n_active;
 	
-	ram_we_n_o <= sram_we_n_o;
-   ram1_oe_n_o<= sram_oe_n_active;
-	ram1_ce_n_o<= sram_cs_n_active;
+	  SRAM_nWE <= ram_we_n_o;
+	-- SRAM_nOE <= sram_oe_n_active;
+	-- SRAM_nCE<= sram_cs_n_active;
 
+	
+	
    zxn_ram_a_di <= sram_port_a_do;
    zxn_ram_b_di <= sram_port_b_do;
 
 	
 	-- To Work with SRAM	
---	ram_data_io_mister  <= sram_data_active when sram_we_n_o = '0' and sram_cs_n_active = '0'  else (others => 'Z');
---   ram_data_io <= ram_data_io_mister when sram_oe_n_active = '0' and sram_cs_n_active = '0'  else (others => 'Z');
+	SRAM_DQ  <= sram_data_active when ram_we_n_o = '0' and sram_cs_n_active = '0'  else (others => 'Z');
+   ram_data_io <= SRAM_DQ       when sram_oe_n_active = '0' and sram_cs_n_active = '0'  else (others => 'Z');
 		
- 	-- Only to work with instanciated RAM
-    ram_data_output  <= sram_data_active when sram_we_n_o = '0'      and sram_cs_n_active = '0'  else (others => 'Z'); -- write to memory
-	 ram_data_io      <= ram_data_input   when sram_oe_n_active = '0' and sram_cs_n_active = '0'  else (others => 'Z');  -- read form memory
+ 	-- Only to work with instanciated BRAM
+--  ram_data_output  <= sram_data_active when ram_we_n_o = '0'      and sram_cs_n_active = '0'  else (others => 'Z'); -- write to memory
+--	 ram_data_io      <= ram_data_input   when sram_oe_n_active = '0' and sram_cs_n_active = '0'  else (others => 'Z');  -- read form memory
+	 
+	 -- only to work with instance SDRAM
+--	 ram_data_output  <= sram_data_active when ram_we_n_o = '0'      and sram_cs_n_active = '0'  else (others => 'Z');  -- write to memory
+--	 ram_data_io      <= ram_data_input   when ram_we_n_o = '1'      and sram_cs_n_active = '0'  else (others => 'Z');  -- read form memory
 
 	
    ------------------------------------------------------------

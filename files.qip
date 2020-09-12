@@ -46,6 +46,7 @@ set_global_assignment -name VHDL_FILE rtl/ram/tdpram.vhd
 set_global_assignment -name VHDL_FILE rtl/ram/spram.vhd
 set_global_assignment -name VHDL_FILE rtl/ram/sdpram.vhd
 set_global_assignment -name VHDL_FILE rtl/ram/dpram.vhd
+set_global_assignment -name VERILOG_FILE rtl/ram/sram.v
 set_global_assignment -name VHDL_FILE rtl/ram/BUFGMUX1.vhd
 set_global_assignment -name VHDL_FILE rtl/zxnext.vhd
 set_global_assignment -name VHDL_FILE rtl/zxnext_Mister.vhd

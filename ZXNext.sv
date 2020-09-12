@@ -268,68 +268,36 @@ pll pll
 	.outclk_3  (CLK_14),    //  14 MHz
 	.outclk_4  (CLK_7),     //   7 MHz
 	.outclk_5  (CLK_56),    //  56 Mhz	
-	.outclk_6  (clk_mem),   // 112 Mhz	
-	.outclk_7  (SDRAM_CLK), // 112 Mhz -4350ps for SDRAM
 	.locked    (pll_locked)
 	
 );
 
 //wire reset = RESET | status[0] | buttons[1] | !pll_locked | (status[14] && img_mounted);
 
-////////////////////   MEMORY   //////////////////
-reg  [20:0] ram_addr;
-reg   [7:0] ram_din;
-reg         ram_we;
-reg         ram_rd;
-reg         ram_cs;
-wire  [7:0] ram_dout;
-wire        ram_ready;
 
-//sdram ram
-//(
-//	.*,
-//	.init(~pll_locked),
-//	.clk(clk_mem),
-//	.dout(ram_dout),
-//	.din (ram_din),
-//	.addr(ram_addr),
-//	.word(0),
-//	.wr(ram_we),
-//	.rd(ram_rd),
-//	.ready(ram_ready)
-//);
 
-// RAM
-//	ssdram256Mb #( 
-//	  .freq_g (112)
-//	) sdram (  
-//	  .clock_i     (clk_mem),
-//	  .reset_i	   (reset),
-//	  .refresh_i   (1'b1),
-//	  // Static RAM bus
-//	  .addr_i      ({4'b0, ram_addr}),
-//	  .data_i      (ram_din),
-//	  .data_o	   (rab_dout),
-//	  .cs_i		   (ram_cs),
-//	  .oe_i		   (ram_rd),
-//	  .we_i		   (ram_we),
-//	  // SD-RAM ports
-//	  .mem_cke_o	(SDRAM_CKE),
-//	  .mem_cs_n_o	(SDRAM_nCS),
-//	  .mem_ras_n_o (SDRAM_nRAS),
-//	  .mem_cas_n_o (SDRAM_nCAS),
-//	  .mem_we_n_o  (SDRAM_nWE),
-//	  .mem_udq_o   (SDRAM_DQMH),
-//	  .mem_ldq_o   (SDRAM_DQML),
-//	  .mem_ba_o    (SDRAM_BA),
-//	  .mem_addr_o  (SDRAM_A),
-//	  .mem_data_io (SDRAM_DQ)
-//	);
+
+
+wire [20:0] SRAM_A;
+wire  [7:0] SRAM_DQ;
+wire  SRAM_nCE, SRAM_nOE, SRAM_nWE;
+
+
+Mister_sRam sRam
+( .*,
+  //.SDRAM_nCS   (1),
+  .SRAM_A               (SRAM_A),
+  .SRAM_DQ              (SRAM_DQ),
+  .SRAM_nCE    (SRAM_nCE),
+  .SRAM_nOE    (SRAM_nOE),
+  .SRAM_nWE    (SRAM_nWE)
+  
+);
 
 
 // BRAM manual implementation //////////////////////////////////////////////////
 reg        reset = 0;
-reg [17:0] clr_addr = 0;
+reg [20:0] clr_addr = 0;
 always @(posedge clk_sys) begin
 
 	if(~&clr_addr) clr_addr <= clr_addr + 1'd1;  // running all addresses
@@ -342,12 +310,13 @@ always @(posedge clk_sys) begin
 	
 end
 
-reg   [7:0] ram[409600];   // 400 KB 
-always @(posedge clk_sys) begin
-	if(reset) ram[clr_addr[17:0]] <= '1;                // re-initialize memory 
-	else if(ram_we & ram_cs) ram[ram_addr] <= ram_din;  // write data to BRAM memory
-end
-always @(posedge clk_sys) ram_dout <= ram[ram_addr];   // read data from BRAM memory
+
+//reg   [7:0] ram[409600];   // 400 KB 
+//always @(posedge clk_sys) begin
+//	if(reset) ram[clr_addr[17:0]] <= '1;                // re-initialize memory 
+//	else if(ram_we & ram_cs) ram[ram_addr] <= ram_din;  // write data to BRAM memory
+//end
+//always @(posedge clk_sys) ram_dout <= ram[ram_addr];   // read data from BRAM memory
 
 //////////////////////////////////////////////////////////////////
 
@@ -361,12 +330,11 @@ ZXNEXT_Mister  ZXNEXT_Mister
  
  .LED                 (LED_USER),
  
- .ram_addr			    (ram_addr),
- .ram_din			    (ram_din),
- .ram_we				    (ram_we),
- .ram_rd              (ram_rd),
- .ram_dout            (ram_dout),
- .ram_cs              (ram_cs),
+ .SRAM_A   				(SRAM_A),
+ .SRAM_DQ  				(SRAM_DQ),
+ .SRAM_nWE 				(SRAM_nWE),
+ .SRAM_nOE 				(SRAM_nOE),
+ .SRAM_nCE 				(SRAM_nCE),
  
  .ps2_clk_i           (ps2_kbd_clk_in),
  .ps2_data_i          (ps2_kbd_data_in),
