@@ -25,12 +25,6 @@ module  pll_0002(
 	// interface 'outclk5'
 	output wire outclk_5,
 
-	// interface 'outclk6'
-	output wire outclk_6,
-
-	// interface 'outclk7'
-	output wire outclk_7,
-
 	// interface 'locked'
 	output wire locked
 );
@@ -39,7 +33,7 @@ module  pll_0002(
 		.fractional_vco_multiplier("false"),
 		.reference_clock_frequency("50.0 MHz"),
 		.operation_mode("direct"),
-		.number_of_clocks(8),
+		.number_of_clocks(6),
 		.output_clock_frequency0("28.000000 MHz"),
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
@@ -58,11 +52,11 @@ module  pll_0002(
 		.output_clock_frequency5("56.000000 MHz"),
 		.phase_shift5("0 ps"),
 		.duty_cycle5(50),
-		.output_clock_frequency6("112.000000 MHz"),
+		.output_clock_frequency6("0 MHz"),
 		.phase_shift6("0 ps"),
 		.duty_cycle6(50),
-		.output_clock_frequency7("112.000000 MHz"),
-		.phase_shift7("6696 ps"),
+		.output_clock_frequency7("0 MHz"),
+		.phase_shift7("0 ps"),
 		.duty_cycle7(50),
 		.output_clock_frequency8("0 MHz"),
 		.phase_shift8("0 ps"),
@@ -98,7 +92,7 @@ module  pll_0002(
 		.pll_subtype("General")
 	) altera_pll_i (
 		.rst	(rst),
-		.outclk	({outclk_7, outclk_6, outclk_5, outclk_4, outclk_3, outclk_2, outclk_1, outclk_0}),
+		.outclk	({outclk_5, outclk_4, outclk_3, outclk_2, outclk_1, outclk_0}),
 		.locked	(locked),
 		.fboutclk	( ),
 		.fbclk	(1'b0),
