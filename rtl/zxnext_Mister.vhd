@@ -1249,15 +1249,15 @@ begin
    begin
       if (zxn_ram_a_req = '1' or zxn_ram_b_req = '1') then
 		      -- 512 Kb 
-       	case sram_addr(19) is
-            when '0'   =>  sram_cs_n <= '0';
-            when others =>  sram_cs_n <= '1';
-         end case; 
+--       	case sram_addr(19) is
+--            when '0'   =>  sram_cs_n <= '0';
+--            when others =>  sram_cs_n <= '1';
+--         end case; 
 
 			
 			
             -- 2 MB
---           sram_cs_n <= '0';
+          sram_cs_n <= '0';
 
       else
          sram_cs_n <= '1';			
