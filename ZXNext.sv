@@ -379,7 +379,7 @@ ZXNEXT_Mister  ZXNEXT_Mister
 
 ///////////////////////////////////////////////////
 
-assign CLK_VIDEO = CLK_56;
+assign CLK_VIDEO = CLK_28;
 //assign CE_PIXEL = 1;
 
 wire [2:0] scale = status[6:5];
@@ -413,7 +413,7 @@ reg [1:0] ce_sys2;
 always @(posedge clk_sys) ce_sys2 <= {ce_sys2[0],ce_sys};
 
 reg ce_vid;
-reg [3:0] Rx, Gx, Bx;
+reg [7:0] Rx, Gx, Bx;
 always @(posedge CLK_VIDEO) begin
   reg ce1;
   
@@ -421,7 +421,7 @@ always @(posedge CLK_VIDEO) begin
   ce_vid <= ce1;
 end
 
-video_mixer #(.LINE_LENGTH(448), .HALF_DEPTH(1), .GAMMA(1)) video_mixer
+video_mixer #(.LINE_LENGTH(448), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 (
   .*,
   .clk_vid(CLK_VIDEO),
