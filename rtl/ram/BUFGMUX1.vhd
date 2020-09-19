@@ -60,14 +60,14 @@ begin
                                                                                    
   q0_p : process(I0, S, q0_enable)
   begin
-     if (I0 /= '0' and now /= 0 ps) then
+     if (I0 /= '0') then
         q0 <= (not S) and q0_enable;
      end if;
   end process;
 
   q1_p : process(I1, S, q1_enable)
   begin
-     if (I1 /= '0' and now /= 0 ps) then
+     if (I1 /= '0') then
         q1 <= S and q1_enable;
      end if;
   end process;
