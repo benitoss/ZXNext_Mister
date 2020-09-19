@@ -378,7 +378,7 @@ always @(posedge clk_spi) begin
 					'h69: if(cmd55) reply <= 0;    // ok, not busy
 
 					// CMD55: APP_COND
-					'h77: reply <= 1;    // ok, busy
+					'h77: reply <= 0;    // ok, busy //rampa
 
 					// CMD58: READ_OCR
 					'h7a: begin
