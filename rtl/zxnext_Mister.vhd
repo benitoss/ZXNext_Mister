@@ -1400,8 +1400,8 @@ begin
 
 	process (CLK_28)
 	begin
-		audio_left  <= '0' & zxn_audio_L_pre & "00";
-	   audio_right <= '0' & zxn_audio_R_pre & "00";
+		audio_left  <= (not zxn_audio_L_pre(12)) & zxn_audio_L_pre(11 downto 0) & "000";
+      audio_right <= (not zxn_audio_R_pre(12)) & zxn_audio_R_pre(11 downto 0) & "000";
 	end process;
 	
 		
