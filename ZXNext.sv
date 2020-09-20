@@ -256,18 +256,17 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000)) hps_io
 
 ///////////////////////   CLOCKS   ///////////////////////////////
 
-wire clk_sys, CLK_28, CLK_28_n, CLK_14, CLK_7, CLK_56, clk_mem ;
+wire clk_sys,CLK_28_n, CLK_14, CLK_7, CLK_56;
 wire pll_locked ;
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
 	.outclk_0  (clk_sys),   //  28 MHz
-	.outclk_1  (CLK_28),    //  28 Mhz
-	.outclk_2  (CLK_28_n),  //  28 Mhz inverted
-	.outclk_3  (CLK_14),    //  14 MHz
-	.outclk_4  (CLK_7),     //   7 MHz
-	.outclk_5  (CLK_56),    //  56 Mhz	
+	.outclk_1  (CLK_28_n),  //  28 Mhz inverted
+	.outclk_2  (CLK_56),    //  56 MHz
+	.outclk_3  (CLK_14),    //  24 MHz
+	.outclk_4  (CLK_7),     //   7 Mhz	
 	.locked    (pll_locked)
 	
 );
@@ -285,8 +284,8 @@ wire  SRAM_nCE, SRAM_nOE, SRAM_nWE;
 
 Mister_sRam sRam
 ( .*,
-  .SRAM_A               (SRAM_A),
-  .SRAM_DQ              (SRAM_DQ),
+  .SRAM_A      (SRAM_A),
+  .SRAM_DQ     (SRAM_DQ),
   .SRAM_nCE    (SRAM_nCE),
   .SRAM_nOE    (SRAM_nOE),
   .SRAM_nWE    (SRAM_nWE)
@@ -321,7 +320,7 @@ end
 
 ZXNEXT_Mister  ZXNEXT_Mister
 (
- .CLK_28              (CLK_28),
+ .CLK_28              (clk_sys),
  .CLK_28_n            (CLK_28_n),
  .CLK_14              (CLK_14),
  .CLK_7               (CLK_7),
@@ -353,7 +352,7 @@ ZXNEXT_Mister  ZXNEXT_Mister
  .audio_left          (AUDIO_L),
  .audio_right         (AUDIO_R),
  
- .ear_port_i          (tape_in),
+ .ear_port_i          (~tape_in),
  
  .joystick1           (status[13] ? joy_1[11:0] : joy_0[11:0] ), // active high =  X Z Y START A C B U D L R
  .joystick2           (status[13] ? joy_0[11:0] : joy_1[11:0] ), // active high =  X Z Y START A C B U D L R
@@ -379,7 +378,7 @@ ZXNEXT_Mister  ZXNEXT_Mister
 
 ///////////////////////////////////////////////////
 
-assign CLK_VIDEO = CLK_28;
+assign CLK_VIDEO = clk_sys;
 //assign CE_PIXEL = 1;
 
 wire [2:0] scale = status[6:5];
@@ -452,7 +451,7 @@ wire vsdmiso;
 sd_card sd_card
 (
 	.*,
-	.clk_spi(clk_sys),
+	.clk_spi(CLK_56),
 	.sdhc(1),
 	.sck(sdclk),
 	.ss(sdss | ~vsd_sel),

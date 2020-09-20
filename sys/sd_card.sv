@@ -348,6 +348,13 @@ always @(posedge clk_spi) begin
 
 					// CMD12: STOP_TRANSMISSION 
 					'h4c: reply <= 0;    // ok
+					
+					// CMD13: SEND_STATUS 
+					'h4d: begin
+					        reply <= 'h00;    // ok //rampa
+							  reply0 <='h00;
+							  reply_len <= 1;
+					      end
 
 					// CMD16: SET_BLOCKLEN
 					'h50: begin
@@ -378,7 +385,7 @@ always @(posedge clk_spi) begin
 					'h69: if(cmd55) reply <= 0;    // ok, not busy
 
 					// CMD55: APP_COND
-					'h77: reply <= 0;    // ok, busy //rampa
+					'h77: reply <= 1;    // ok, busy
 
 					// CMD58: READ_OCR
 					'h7a: begin
