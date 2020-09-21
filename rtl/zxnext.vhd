@@ -205,6 +205,8 @@ entity zxnext is
       o_BUS_EN             : out std_logic;                       -- enable the expansion bus, changes on rising edge of cpu clock
       o_BUS_CLKEN          : out std_logic;                       -- 1 to keep 3.5MHz clock on the expansion bus even when off
       
+      o_BUS_NMI_DEBOUNCE_DISABLE  : out std_logic;
+      
       -- ESP GPIO
       
       i_ESP_GPIO_20        : in std_logic_vector(2 downto 0);
@@ -285,17 +287,14 @@ architecture rtl of zxnext is
    signal nmi_expbus             : std_logic := '0';
    signal nmi_hold               : std_logic;
    
-   type   nmi_state_t            is (S_NMI_IDLE, S_NMI_HOLD, S_NMI_END);
+   type   nmi_state_t            is (S_NMI_IDLE, S_NMI_ASSERT, S_NMI_OPUS, S_NMI_HOLD, S_NMI_END);
    signal nmi_state              : nmi_state_t := S_NMI_IDLE;
    signal nmi_state_next         : nmi_state_t;
    signal nmi_holding            : std_logic;
+   signal nmi_opus               : std_logic;
    signal nmi_generate_n         : std_logic;
    signal nmi_mf_button          : std_logic;
    signal nmi_divmmc_button      : std_logic;
-   
-   signal nmi_counter_start      : std_logic;
-   signal nmi_counter_expire     : std_logic;
-   signal nmi_counter            : std_logic_vector(4 downto 0) := (others => '0');
    
    -- EXPANSION BUS
    
@@ -392,7 +391,7 @@ architecture rtl of zxnext is
    
    -- PORT DECODING
    
-   signal internal_port_enable   : std_logic_vector(26 downto 0);
+   signal internal_port_enable   : std_logic_vector(27 downto 0);
    
    signal port_ff_io_en          : std_logic;
    signal port_7ffd_io_en        : std_logic;
@@ -403,7 +402,9 @@ architecture rtl of zxnext is
    signal port_1f_io_en          : std_logic;
    signal port_37_io_en          : std_logic;
    signal port_divmmc_io_en      : std_logic;
+   signal port_divmmc_io_en_diff             : std_logic;
    signal port_multiface_io_en   : std_logic;
+   signal port_multiface_io_en_diff          : std_logic;
    signal port_i2c_io_en         : std_logic;
    signal port_spi_io_en         : std_logic;
    signal port_uart_io_en        : std_logic;
@@ -421,6 +422,7 @@ architecture rtl of zxnext is
    signal port_ulap_io_en        : std_logic;
    signal port_dma_0b_io_en      : std_logic;
    signal port_eff7_io_en        : std_logic;
+   signal port_ctc_io_en         : std_logic;
    
    signal port_1f_hw_en          : std_logic;
    signal port_37_hw_en          : std_logic;
@@ -430,30 +432,43 @@ architecture rtl of zxnext is
    
    signal bus_iorq_ula           : std_logic := '0';
 
+   signal port_00xx_msb          : std_logic;
+   signal port_04xx_msb          : std_logic;
+   signal port_05xx_msb          : std_logic;
    signal port_10xx_msb          : std_logic;
    signal port_11xx_msb          : std_logic;
    signal port_12xx_msb          : std_logic;
    signal port_13xx_msb          : std_logic;
    signal port_14xx_msb          : std_logic;
    signal port_15xx_msb          : std_logic;
+   signal port_1fxx_msb          : std_logic;
    signal port_24xx_msb          : std_logic;
    signal port_25xx_msb          : std_logic;
    signal port_30xx_msb          : std_logic;
+   signal port_3dxx_msb          : std_logic;
+   signal port_7fxx_msb          : std_logic;
    signal port_bfxx_msb          : std_logic;
+   signal port_fexx_msb          : std_logic;
    signal port_ffxx_msb          : std_logic;
 
+   signal port_00_lsb            : std_logic;
+   signal port_08_lsb            : std_logic;
    signal port_0b_lsb            : std_logic;
    signal port_0f_lsb            : std_logic;
    signal port_1f_lsb            : std_logic;
    signal port_37_lsb            : std_logic;
+   signal port_38_lsb            : std_logic;
    signal port_3f_lsb            : std_logic;
    signal port_3b_lsb            : std_logic;
    signal port_4f_lsb            : std_logic;
    signal port_57_lsb            : std_logic;
    signal port_5b_lsb            : std_logic;
    signal port_5f_lsb            : std_logic;
+   signal port_62_lsb            : std_logic;
+   signal port_66_lsb            : std_logic;
    signal port_6b_lsb            : std_logic;
    signal port_b3_lsb            : std_logic;
+   signal port_c6_lsb            : std_logic;
    signal port_df_lsb            : std_logic;
    signal port_e3_lsb            : std_logic;
    signal port_e7_lsb            : std_logic;
@@ -467,6 +482,7 @@ architecture rtl of zxnext is
    
    signal port_fe                : std_logic;
    signal port_ff                : std_logic;
+   signal port_fe_override       : std_logic;
    signal port_fd                : std_logic;
    signal port_p3_float          : std_logic;
 -- signal port_p3_float_active   : std_logic;
@@ -512,6 +528,7 @@ architecture rtl of zxnext is
    signal port_303b              : std_logic;
    signal port_bf3b              : std_logic;
    signal port_ff3b              : std_logic;
+   signal port_ctc               : std_logic;
    signal port_internal_response : std_logic;
    
    signal iord                   : std_logic;
@@ -575,6 +592,8 @@ architecture rtl of zxnext is
    signal port_bf3b_wr           : std_logic;
    signal port_ff3b_rd           : std_logic;
    signal port_ff3b_wr           : std_logic;
+   signal port_ctc_wr            : std_logic;
+   signal port_ctc_rd            : std_logic;
 
    signal port_internal_rd_response          : std_logic;
    
@@ -601,8 +620,22 @@ architecture rtl of zxnext is
    signal port_37_rd_dat         : std_logic_vector(7 downto 0);
    signal port_303b_rd_dat       : std_logic_vector(7 downto 0);
    signal port_ff3b_rd_dat       : std_logic_vector(7 downto 0);
+   signal port_ctc_rd_dat        : std_logic_vector(7 downto 0);
    
    signal port_rd_dat            : std_logic_vector(7 downto 0);
+
+   -- MEMORY ADDRESSES
+
+   signal divmmc_automap_en_instant             : std_logic;
+   signal divmmc_automap_en_delayed             : std_logic;
+   signal divmmc_automap_en_delayed_nohide      : std_logic;
+   signal divmmc_automap_en_delayed_nohide_nmi  : std_logic;
+   signal divmmc_automap_dis_delayed            : std_logic;
+
+   signal mf_a_0066              : std_logic;
+   signal mf_a_1fxx              : std_logic;
+   signal mf_a_7fxx              : std_logic;
+   signal mf_a_fexx              : std_logic;
 
    -- MEMORY DECODING
    
@@ -621,11 +654,13 @@ architecture rtl of zxnext is
    signal mem_active_bank5       : std_logic;
    signal mem_active_bank7       : std_logic;
    signal sram_active_rom        : std_logic_vector(1 downto 0);
+   signal sram_rom3              : std_logic;
    signal sram_alt_128           : std_logic;
    signal eff_expbus_romcs_replace           : std_logic;
    
    signal layer2_pre_A21_A13     : std_logic_vector(8 downto 0);
    signal sram_pre_active        : std_logic;
+   signal sram_pre_rom3          : std_logic;
    signal sram_pre_bank5         : std_logic;
    signal sram_pre_bank7         : std_logic;
    signal sram_pre_rdonly        : std_logic;
@@ -645,6 +680,8 @@ architecture rtl of zxnext is
    signal sram_bank7             : std_logic;
    signal sram_rdonly            : std_logic;
    signal sram_romcs_en          : std_logic;
+   signal sram_obscure_divmmc_automap        : std_logic;
+   signal sram_disable_divmmc_automap        : std_logic;
    
    signal memcycle               : std_logic;
    signal memcycle_delay         : std_logic_vector(3 downto 0);
@@ -752,7 +789,7 @@ architecture rtl of zxnext is
    signal joy_key                : std_logic_vector(4 downto 0);
    
    signal port_fe_bus            : std_logic_vector(7 downto 0);
-   signal port_fe_dat_0          : std_logic_vector(7 downto 0) := X"80";
+   signal port_fe_dat_0          : std_logic_vector(7 downto 0);
    signal port_fe_dat            : std_logic_vector(7 downto 0);
    
    signal mdL_1f_en              : std_logic;
@@ -840,6 +877,13 @@ architecture rtl of zxnext is
    signal copper_lsb_we          : std_logic;
    signal copper_lsb_dat         : std_logic_vector(7 downto 0);
    
+   signal ctc_do                 : std_logic_vector(7 downto 0);
+   signal port_ctc_dat           : std_logic_vector(7 downto 0);
+   signal ctc_zc_to              : std_logic_vector(7 downto 0);
+   signal ctc_int_en             : std_logic_vector(7 downto 0);
+   signal ctc_int                : std_logic_vector(7 downto 0);
+   signal ctc_int_n              : std_logic;
+   
    signal divmmc_rom_en          : std_logic;
    signal divmmc_ram_en          : std_logic;
    signal divmmc_rdonly          : std_logic;
@@ -847,6 +891,7 @@ architecture rtl of zxnext is
    signal port_e3_reg            : std_logic_vector(7 downto 0);
    signal port_e3_dat            : std_logic_vector(7 downto 0);
    signal divmmc_nmi_hold        : std_logic;
+   signal divmmc_automap_held    : std_logic;
    
    signal layer2_addr            : std_logic_vector(16 downto 0);
    signal layer2_pixel_en        : std_logic;
@@ -869,9 +914,10 @@ architecture rtl of zxnext is
 -- signal lores_clip_y2_0        : std_logic_vector(7 downto 0);
    
    signal mf_mem_en              : std_logic;
+   signal mf_nmi_hold            : std_logic;
    signal mf_port_en             : std_logic;
    signal mf_port_dat            : std_logic_vector(7 downto 0);
-   signal mf_nmi_hold            : std_logic;
+   signal mf_is_active           : std_logic;
    
    signal port_303b_dat          : std_logic_vector(7 downto 0);
    signal sprite_mirror_id       : std_logic_vector(6 downto 0);
@@ -879,6 +925,7 @@ architecture rtl of zxnext is
    signal sprite_pixel_en        : std_logic;
    
    signal sc                     : std_logic_vector(1 downto 0);
+   signal tm_mem_bank7           : std_logic;
    signal tm_vram_a              : std_logic_vector(13 downto 0);
    signal tm_vram_rd             : std_logic;
    signal tm_vram_ack            : std_logic;
@@ -982,6 +1029,7 @@ architecture rtl of zxnext is
    signal nr_8c_we               : std_logic;
    signal nr_8e_we               : std_logic;
    signal nr_8f_we               : std_logic;
+   signal nr_c6_we               : std_logic;
    signal nr_ff_we               : std_logic;
    
    signal nr_02_bus_reset        : std_logic;
@@ -1091,7 +1139,9 @@ architecture rtl of zxnext is
    signal nr_6b_tm_control       : std_logic_vector(6 downto 0);
    signal nr_6c_tm_default_attr  : std_logic_vector(7 downto 0);
    signal nr_6e_tilemap_base     : std_logic_vector(5 downto 0);
+   signal nr_6e_tilemap_base_7   : std_logic;
    signal nr_6f_tilemap_tiles    : std_logic_vector(5 downto 0);
+   signal nr_6f_tilemap_tiles_7  : std_logic;
    signal nr_70_layer2_resolution      : std_logic_vector(1 downto 0);
    signal nr_70_layer2_palette_offset  : std_logic_vector(3 downto 0);
    signal nr_71_layer2_scrollx_msb     : std_logic;
@@ -1100,17 +1150,19 @@ architecture rtl of zxnext is
    signal nr_99_pi_gpio_o        : std_logic_vector(7 downto 0);
    signal nr_9a_pi_gpio_o        : std_logic_vector(7 downto 0);
    signal nr_9b_pi_gpio_o        : std_logic_vector(3 downto 0);
+   signal nr_81_expbus_ula_override          : std_logic := '0';
+   signal nr_81_expbus_nmi_debounce_disable  : std_logic := '0';
    signal nr_81_expbus_clken     : std_logic := '0';
    signal nr_81_expbus_speed     : std_logic_vector(1 downto 0) := "00";
    signal nr_82_internal_port_enable         : std_logic_vector(7 downto 0);
    signal nr_83_internal_port_enable         : std_logic_vector(7 downto 0);
    signal nr_84_internal_port_enable         : std_logic_vector(7 downto 0);
-   signal nr_85_internal_port_enable         : std_logic_vector(2 downto 0);
+   signal nr_85_internal_port_enable         : std_logic_vector(3 downto 0);
    signal nr_85_internal_port_reset_type     : std_logic := '1';
    signal nr_86_bus_port_enable  : std_logic_vector(7 downto 0);
    signal nr_87_bus_port_enable  : std_logic_vector(7 downto 0);
    signal nr_88_bus_port_enable  : std_logic_vector(7 downto 0);
-   signal nr_89_bus_port_enable  : std_logic_vector(2 downto 0);
+   signal nr_89_bus_port_enable  : std_logic_vector(3 downto 0);
    signal nr_89_bus_port_reset_type          : std_logic := '1';
    signal nr_8a_bus_port_propagate           : std_logic_vector(5 downto 0);
    signal nr_90_pi_gpio_o_en     : std_logic_vector(7 downto 0) := (others => '0');
@@ -1122,6 +1174,7 @@ architecture rtl of zxnext is
 -- signal nr_a3_pi_i2s_clkdiv    : std_logic_vector(7 downto 0);
    signal nr_a8_esp_gpio0_en     : std_logic := '0';
    signal nr_a9_esp_gpio0        : std_logic := '1';
+   signal nr_0a_mf_type          : std_logic_vector(1 downto 0) := "00";
    signal nr_0a_mouse_button_reverse         : std_logic := '0';
    signal nr_0a_mouse_dpi        : std_logic_vector(1 downto 0) := "01";
    
@@ -1141,6 +1194,9 @@ architecture rtl of zxnext is
    signal hotkey_scanlines       : std_logic;
    signal hotkey_hard_reset      : std_logic;
    signal hotkey_soft_reset      : std_logic;
+   signal hotkey_expbus_enable   : std_logic;
+   signal hotkey_expbus_disable  : std_logic;
+   signal hotkey_expbus_freeze   : std_logic;
    signal hotkey_m1              : std_logic;
    signal hotkey_drive           : std_logic;
    
@@ -1202,15 +1258,15 @@ architecture rtl of zxnext is
    signal cpu_bank5_do           : std_logic_vector(7 downto 0);
    signal vram_bank5_do0         : std_logic_vector(7 downto 0);
    signal vram_bank5_do1         : std_logic_vector(7 downto 0);
-   signal ula_bank5_req          : std_logic;
-   signal ula_bank5_req_dly      : std_logic;
-   signal ula_bank5_sched_dly    : std_logic;
-   signal ula_bank5_sched        : std_logic;
-   signal ula_bank5_do           : std_logic_vector(7 downto 0);
+   signal ula_bank_req          : std_logic;
+   signal ula_bank_req_dly      : std_logic;
+   signal ula_bank_sched_dly    : std_logic;
+   signal ula_bank_sched        : std_logic;
+   signal ula_bank_do           : std_logic_vector(7 downto 0);
    signal lores_vram_req         : std_logic;
    signal lores_vram_ack_dly     : std_logic;
    signal vram_bank5_a0          : std_logic_vector(13 downto 0);
-   signal vram_bank5_a1          : std_logic_vector(13 downto 0);
+   signal vram_bank_a1          : std_logic_vector(13 downto 0);
    signal lores_vram_ack         : std_logic;
    
    signal cpu_bank7_do           : std_logic_vector(7 downto 0);
@@ -1503,6 +1559,8 @@ begin
 
    o_BUS_EN <= expbus_eff_en;
    o_BUS_CLKEN <= expbus_eff_clken;
+   
+   o_BUS_NMI_DEBOUNCE_DISABLE <= nr_81_expbus_nmi_debounce_disable;
 
    o_ESP_GPIO_0 <= nr_a9_esp_gpio0;
    o_ESP_GPIO_0_EN <= nr_a8_esp_gpio0_en;
@@ -1638,13 +1696,8 @@ begin
    --
    -- nmi
    --
-   
-   -- spectrum peripherals have broken zilog's nmi model
-   -- to accommodate multiple nmi sources the peripheral generating nmi must hold nmi low for the entire duration of the nmi routine
-   
+
    -- first come first serve
-   
-   nmi_activated <= nmi_mf or nmi_divmmc or nmi_expbus;
    
    process (i_CLK_28)
    begin
@@ -1661,17 +1714,19 @@ begin
 
    nmi_assert_expbus <= '1' when expbus_eff_en = '1' and expbus_eff_disable_mem = '0' and i_BUS_NMI_n = '0' else '0';
    
+   nmi_activated <= nmi_mf or nmi_divmmc or nmi_expbus;
+   
    process (i_CLK_28)
    begin
       if rising_edge(i_CLK_28) then
-         if reset = '1' or (nmi_state = S_NMI_END and nmi_counter_expire = '1') or machine_type_config = '1' then
+         if reset = '1' or nmi_state = S_NMI_END or machine_type_config = '1' then
             nmi_mf <= '0';
             nmi_divmmc <= '0';
             nmi_expbus <= '0';
          elsif nmi_activated = '0' then
-            if hotkey_m1 = '1' and nr_06_button_m1_nmi_en = '1' and nr_06_divmmc_automap_en = '0' and port_e3_dat(7) = '0' then
+            if hotkey_m1 = '1' and nr_06_button_m1_nmi_en = '1' and port_e3_reg(7) = '0' and divmmc_nmi_hold = '0' then
                nmi_mf <= '1';
-            elsif hotkey_drive = '1' and nr_06_divmmc_automap_en = '1' then
+            elsif hotkey_drive = '1' and nr_06_divmmc_automap_en = '1' and mf_is_active = '0' then
                nmi_divmmc <= '1';
             elsif nmi_expbus_en = '1' and nmi_assert_expbus = '1' then
                nmi_expbus <= '1';
@@ -1683,36 +1738,42 @@ begin
    nmi_hold <= mf_nmi_hold when nmi_mf = '1' else divmmc_nmi_hold when nmi_divmmc = '1' else nmi_assert_expbus;
    
    -- nmi state machine
-   -- hold high 32 cycles after source releases
    
-   nmi_holding <= '1' when nmi_hold = '1' or dma_holds_bus = '1' or nmi_counter_expire = '0' else '0';
+   nmi_holding <= '1' when nmi_hold = '1' or dma_holds_bus = '1' else '0';
+   nmi_opus <= '1' when nmi_mf = '1' and nr_81_expbus_nmi_debounce_disable = '1' and nmi_assert_expbus = '1' else '0';
    
-   process (nmi_state, nmi_activated, nmi_holding, nmi_counter_expire)
+   process (nmi_state, nmi_activated, nmi_holding, nmi_opus)
    begin
       case nmi_state is
          when S_NMI_IDLE =>
             if nmi_activated = '1' then
-               nmi_state_next <= S_NMI_HOLD;
+               nmi_state_next <= S_NMI_ASSERT;
             else
                nmi_state_next <= S_NMI_IDLE;
             end if;
-         when S_NMI_HOLD =>
-            if nmi_holding = '1' then
+         when S_NMI_ASSERT =>
+            nmi_state_next <= S_NMI_HOLD;
+         when S_NMI_OPUS =>                    -- separate to avoid button activation in multiface
+            if nmi_opus = '1' then
+               nmi_state_next <= S_NMI_OPUS;
+            else
                nmi_state_next <= S_NMI_HOLD;
-            else
-               nmi_state_next <= S_NMI_END;
             end if;
-         when S_NMI_END =>
-            if nmi_counter_expire = '1' then
-               nmi_state_next <= S_NMI_IDLE;
-            else
+         when S_NMI_HOLD  =>
+            if nmi_holding = '0' then
                nmi_state_next <= S_NMI_END;
+            elsif nmi_opus = '1' then          -- multiface + opus discovery
+               nmi_state_next <= S_NMI_OPUS;
+            else
+               nmi_state_next <= S_NMI_HOLD;
             end if;
+--       when S_NMI_END =>
+--          nmi_state_next <= S_NMI_IDLE;
          when others =>
             nmi_state_next <= S_NMI_IDLE;
       end case;
    end process;
-
+   
    process (i_CLK_CPU)
    begin
       if rising_edge(i_CLK_CPU) then
@@ -1724,27 +1785,9 @@ begin
       end if;
    end process;
    
-   nmi_generate_n <= '0' when nmi_state = S_NMI_HOLD else '1';
-   nmi_mf_button <= '1' when nmi_mf = '1' and nmi_state = S_NMI_HOLD and nmi_counter(4 downto 3) = "11" else '0';   -- internal multiface needs a short nmi pulse
-   nmi_divmmc_button <= '1' when nmi_divmmc = '1' and nmi_state = S_NMI_HOLD else '0';
-   
-   -- nmi counter
-   
-   nmi_counter_start <= '1' when (nmi_state = S_NMI_IDLE and nmi_activated = '1') or (nmi_state = S_NMI_HOLD and nmi_holding = '0') else '0';
-   nmi_counter_expire <= '1' when nmi_counter = "00000" else '0';
-
-   process (i_CLK_CPU)
-   begin
-      if rising_edge(i_CLK_CPU) then
-         if reset = '1' or machine_type_config = '1' then
-            nmi_counter <= (others => '0');
-         elsif nmi_counter_start = '1' then
-            nmi_counter <= (others => '1');
-         elsif nmi_counter_expire = '0' and dma_holds_bus = '0' then
-            nmi_counter <= nmi_counter - 1;
-         end if;
-      end if;
-   end process;
+   nmi_generate_n <= '0' when nmi_state = S_NMI_ASSERT or nmi_state = S_NMI_OPUS else '1';
+   nmi_mf_button <= '1' when nmi_mf = '1' and nmi_state = S_NMI_ASSERT else '0';
+   nmi_divmmc_button <= '1' when nmi_divmmc = '1' and nmi_state = S_NMI_ASSERT else '0';
 
    ------------------------------------------------------------
    -- EXPANSION BUS -------------------------------------------
@@ -1753,6 +1796,8 @@ begin
    --
    -- expansion bus control (changed during iowr to port 253b or nextreg instruction)
    --
+   
+   hotkey_expbus_freeze <= '1' when (port_divmmc_io_en_diff = '1' and divmmc_automap_held = '1') or (port_multiface_io_en_diff = '1' and mf_mem_en = '1') else '0';
    
    process (i_CLK_28)
    begin
@@ -1763,10 +1808,14 @@ begin
             nr_80_expbus(7 downto 4) <= nr_80_expbus(3 downto 0);
          elsif nr_80_we = '1' then
             nr_80_expbus <= nr_wr_dat;
+         elsif hotkey_expbus_enable = '1' and hotkey_expbus_freeze = '0' then
+            nr_80_expbus(7) <= '1';
+         elsif hotkey_expbus_disable = '1' and hotkey_expbus_freeze = '0' then
+            nr_80_expbus(7) <= '0';
          end if;
       end if;
    end process;
-   
+
    expbus_en <= nr_80_expbus(7);
    expbus_romcs_replace <= nr_80_expbus(6);
    expbus_disable_io <= nr_80_expbus(5);
@@ -1971,7 +2020,10 @@ begin
    --
 
    port_divmmc_io_en <= internal_port_enable(8);
+   port_divmmc_io_en_diff <= nr_83_internal_port_enable(0) xor nr_87_bus_port_enable(0);
+   
    port_multiface_io_en <= internal_port_enable(9);
+   port_multiface_io_en_diff <= nr_83_internal_port_enable(1) xor nr_87_bus_port_enable(1);
    
    port_i2c_io_en <= internal_port_enable(10);
    port_spi_io_en <= internal_port_enable(11);
@@ -1997,6 +2049,7 @@ begin
    port_ulap_io_en <= internal_port_enable(24);
    port_dma_0b_io_en <= internal_port_enable(25);
    port_eff7_io_en <= internal_port_enable(26);
+   port_ctc_io_en <= internal_port_enable(27);
    
    --
    -- peripheral disable
@@ -2038,30 +2091,44 @@ begin
    process (cpu_a(15 downto 8))
    begin
    
+      port_00xx_msb <= '0';
+      port_04xx_msb <= '0';
+      port_05xx_msb <= '0';
       port_10xx_msb <= '0';
       port_11xx_msb <= '0';
       port_12xx_msb <= '0';
       port_13xx_msb <= '0';
       port_14xx_msb <= '0';
       port_15xx_msb <= '0';
+      port_1fxx_msb <= '0';
       port_24xx_msb <= '0';
       port_25xx_msb <= '0';
       port_30xx_msb <= '0';
+      port_3dxx_msb <= '0';
+      port_7fxx_msb <= '0';
       port_bfxx_msb <= '0';
+      port_fexx_msb <= '0';
       port_ffxx_msb <= '0';
       
       case cpu_a(15 downto 8) is
       
+         when X"00"  => port_00xx_msb <= '1';
+         when X"04"  => port_04xx_msb <= '1';
+         when X"05"  => port_05xx_msb <= '1';
          when X"10"  => port_10xx_msb <= '1';
          when X"11"  => port_11xx_msb <= '1';
          when X"12"  => port_12xx_msb <= '1';
          when X"13"  => port_13xx_msb <= '1';
          when X"14"  => port_14xx_msb <= '1';
          when X"15"  => port_15xx_msb <= '1';
+         when X"1F"  => port_1fxx_msb <= '1';
          when X"24"  => port_24xx_msb <= '1';
          when X"25"  => port_25xx_msb <= '1';
          when X"30"  => port_30xx_msb <= '1';
+         when X"3D"  => port_3dxx_msb <= '1';
+         when X"7F"  => port_7fxx_msb <= '1';
          when X"BF"  => port_bfxx_msb <= '1';
+         when X"FE"  => port_fexx_msb <= '1';
          when X"FF"  => port_ffxx_msb <= '1';
          when others => null;
       
@@ -2072,18 +2139,24 @@ begin
    process (cpu_a(7 downto 0))
    begin
    
+      port_00_lsb <= '0';
+      port_08_lsb <= '0';
       port_0b_lsb <= '0';
       port_0f_lsb <= '0';
       port_1f_lsb <= '0';
       port_37_lsb <= '0';
+      port_38_lsb <= '0';
       port_3f_lsb <= '0';
       port_3b_lsb <= '0';
       port_4f_lsb <= '0';
       port_57_lsb <= '0';
       port_5b_lsb <= '0';
       port_5f_lsb <= '0';
+      port_62_lsb <= '0';
+      port_66_lsb <= '0';
       port_6b_lsb <= '0';
       port_b3_lsb <= '0';
+      port_c6_lsb <= '0';
       port_df_lsb <= '0';
       port_e3_lsb <= '0';
       port_e7_lsb <= '0';
@@ -2097,18 +2170,24 @@ begin
    
       case cpu_a(7 downto 0) is
    
+         when X"00"  => port_00_lsb <= '1';
+         when X"08"  => port_08_lsb <= '1';
          when X"0B"  => port_0b_lsb <= '1';
          when X"0F"  => port_0f_lsb <= '1';
          when X"1F"  => port_1f_lsb <= '1';
          when X"37"  => port_37_lsb <= '1';
+         when X"38"  => port_38_lsb <= '1';
          when X"3F"  => port_3f_lsb <= '1';
          when X"4F"  => port_4f_lsb <= '1';
          when X"57"  => port_57_lsb <= '1';
          when X"5B"  => port_5b_lsb <= '1';
          when X"5F"  => port_5f_lsb <= '1';
          when X"3B"  => port_3b_lsb <= '1';
+         when X"62"  => port_62_lsb <= '1';
+         when X"66"  => port_66_lsb <= '1';
          when X"6B"  => port_6b_lsb <= '1';
          when X"B3"  => port_b3_lsb <= '1';
+         when X"C6"  => port_c6_lsb <= '1';
          when X"DF"  => port_df_lsb <= '1';
          when X"E3"  => port_e3_lsb <= '1';
          when X"E7"  => port_e7_lsb <= '1';
@@ -2131,6 +2210,8 @@ begin
    
    port_fe <= '1' when cpu_a(0) = '0' else '0';
    port_ff <= '1' when port_ff_lsb = '1' else '0';
+   
+   port_fe_override <= '1' when cpu_a(7 downto 4) = "0000" and nr_81_expbus_ula_override = '1' else '0';
    
    -- +3 floating bus
    
@@ -2158,8 +2239,8 @@ begin
    
    -- multiface
 
-   port_mf_enable_io_a <= X"3F" when machine_type_p3 = '1' else X"9F";
-   port_mf_disable_io_a <= X"BF" when machine_type_p3 = '1' else X"1F";
+   port_mf_enable_io_a <= X"9F" when nr_0a_mf_type(1) = '1' else X"BF" when nr_0a_mf_type(0) = '1' else X"3F";
+   port_mf_disable_io_a <= X"1F" when nr_0a_mf_type(1) = '1' else X"3F" when nr_0a_mf_type(0) = '1' else X"BF";
    
    port_mf_enable <= '1' when cpu_a(7 downto 0) = port_mf_enable_io_a and port_multiface_io_en = '1' else '0';
    port_mf_disable <= '1' when cpu_a(7 downto 0) = port_mf_disable_io_a and port_multiface_io_en = '1' else '0';
@@ -2235,6 +2316,10 @@ begin
    port_bf3b <= '1' when port_bfxx_msb = '1' and port_3b_lsb = '1' and port_ulap_io_en = '1' else '0';
    port_ff3b <= '1' when port_ffxx_msb = '1' and port_3b_lsb = '1' and port_ulap_io_en = '1' else '0';
    
+   -- z80 ctc
+   
+   port_ctc <= '1' when cpu_a(15 downto 11) = "00011" and port_3b_lsb = '1' and port_ctc_io_en = '1' else '0';
+   
    --
    
    -- check if xst handles this well
@@ -2242,7 +2327,7 @@ begin
    port_internal_response <= port_fe or port_ff or port_p3_float or port_7ffd or port_dffd or port_1ffd or port_eff7 or port_e3 or
       port_mf_enable or port_mf_disable or port_e7 or port_eb or port_243b or port_253b or port_103b or port_113b or port_123b or port_133b or 
       port_143b or port_153b or port_dma or port_fffd or port_bffd or port_dac_A or port_dac_B or port_dac_C or port_dac_D or
-      port_fadf or port_fbdf or port_ffdf or port_1f or port_37 or port_57 or port_5b or port_303b or port_bf3b or port_ff3b;
+      port_fadf or port_fbdf or port_ffdf or port_1f or port_37 or port_57 or port_5b or port_303b or port_bf3b or port_ff3b or port_ctc;
    
    --
    -- complete port decode with iorq, rd, wr, m1
@@ -2327,6 +2412,9 @@ begin
    port_ff3b_rd <= iord and port_ff3b;
    port_ff3b_wr <= iowr and port_ff3b;
    
+   port_ctc_wr <= iowr and port_ctc;
+   port_ctc_rd <= iord and port_ctc;
+   
    --
    
    -- check if xst handles this well
@@ -2334,7 +2422,7 @@ begin
    port_internal_rd_response <= port_fe_rd or port_ff_rd or port_p3_float_rd or port_e3_rd or mf_port_en or 
       port_eb_rd or port_243b_rd or port_253b_rd or port_103b_rd or port_113b_rd or port_123b_rd or port_133b_rd or
       port_143b_rd or port_153b_rd or port_dma_rd or port_fffd_rd or port_fadf_rd or port_fbdf_rd or port_ffdf_rd or
-      port_1f_rd or port_37_rd or port_303b_rd or port_ff3b_rd;
+      port_1f_rd or port_37_rd or port_303b_rd or port_ff3b_rd or port_ctc_rd;
    
    --
    -- Use wired-or logic to avoid expensive if-elsif-endif chain
@@ -2363,14 +2451,34 @@ begin
    port_37_rd_dat <= port_37_dat when port_37_rd = '1' else X"00";
    port_303b_rd_dat <= port_303b_dat when port_303b_rd = '1' else X"00";
    port_ff3b_rd_dat <= port_ff3b_dat when port_ff3b_rd = '1' else X"00";
+   port_ctc_rd_dat <= port_ctc_dat when port_ctc_rd = '1' else X"00";
    
    -- check if xst handles this well
    
    port_rd_dat <= port_fe_rd_dat or port_ff_rd_dat or port_p3_float_rd_dat or port_e3_rd_dat or port_mf_rd_dat or 
       port_eb_rd_dat or port_243b_rd_dat or port_253b_rd_dat or port_103b_rd_dat or port_113b_rd_dat or port_123b_rd_dat or port_133b_rd_dat or
       port_143b_rd_dat or port_153b_rd_dat or port_dma_rd_dat or port_fffd_rd_dat or port_fadf_rd_dat or port_fbdf_rd_dat or
-      port_ffdf_rd_dat or port_1f_rd_dat or port_37_rd_dat or port_303b_rd_dat or port_ff3b_rd_dat;
+      port_ffdf_rd_dat or port_1f_rd_dat or port_37_rd_dat or port_303b_rd_dat or port_ff3b_rd_dat or port_ctc_rd_dat;
    
+   ------------------------------------------------------------
+   -- MEMORY ADDRESSES ----------------------------------------
+   ------------------------------------------------------------
+
+   -- divmmc
+   
+   divmmc_automap_en_instant <= port_3dxx_msb;
+   divmmc_automap_en_delayed <= (port_00xx_msb and port_08_lsb) or (port_00xx_msb and port_38_lsb) or (port_04xx_msb and port_c6_lsb) or (port_05xx_msb and port_62_lsb);
+   divmmc_automap_en_delayed_nohide <= port_00xx_msb and port_00_lsb;
+   divmmc_automap_en_delayed_nohide_nmi <= port_00xx_msb and port_66_lsb;
+   divmmc_automap_dis_delayed <= '1' when port_1fxx_msb = '1' and cpu_a(7 downto 3) = "11111" else '0';
+   
+   -- multiface
+   
+   mf_a_0066 <= port_00xx_msb and port_66_lsb;
+   mf_a_1fxx <= port_1fxx_msb;
+   mf_a_7fxx <= port_7fxx_msb;
+   mf_a_fexx <= port_fexx_msb;
+
    ------------------------------------------------------------
    -- MEMORY DECODING -----------------------------------------
    ------------------------------------------------------------
@@ -2439,21 +2547,26 @@ begin
    begin
       if machine_type_48 = '1' then
          sram_active_rom <= "00";
+         sram_rom3 <= '1';
          sram_alt_128 <= (not nr_8c_altrom_lock_rom1) and nr_8c_altrom_lock_rom0;
       elsif machine_type_p3 = '1' then
          if nr_8c_altrom_lock_rom1 = '1' or nr_8c_altrom_lock_rom0 = '1' then
             sram_active_rom <= nr_8c_altrom_lock_rom1 & nr_8c_altrom_lock_rom0;
+            sram_rom3 <= nr_8c_altrom_lock_rom1 and nr_8c_altrom_lock_rom0;
             sram_alt_128 <= not nr_8c_altrom_lock_rom1;
          else
             sram_active_rom <= port_1ffd_rom;
+            sram_rom3 <= port_1ffd_rom(1) and port_1ffd_rom(0);
             sram_alt_128 <= not port_1ffd_rom(0);   -- behave like a 128k machine
          end if;
       else
          if nr_8c_altrom_lock_rom1 = '1' or nr_8c_altrom_lock_rom0 = '1' then
             sram_active_rom <= '0' & nr_8c_altrom_lock_rom1;
+            sram_rom3 <= nr_8c_altrom_lock_rom1;
             sram_alt_128 <= not nr_8c_altrom_lock_rom1;
          else
             sram_active_rom <= '0' & port_1ffd_rom(0);
+            sram_rom3 <= port_1ffd_rom(0);
             sram_alt_128 <= not port_1ffd_rom(0);
          end if;
       end if;
@@ -2478,6 +2591,7 @@ begin
             sram_pre_rdonly <= '0';
             sram_pre_romcs <= '0';
             sram_pre_alt_en <= '0';
+            sram_pre_rom3 <= '0';
 
             if cpu_a(15 downto 14) = "00" then
                if sram_config_active = '1' then
@@ -2494,6 +2608,7 @@ begin
                   sram_pre_rdonly <= not (nr_8c_altrom_en and nr_8c_altrom_rw);
                   sram_pre_romcs <= not expbus_eff_disable_mem;
                   sram_pre_alt_en <= nr_8c_altrom_en;
+                  sram_pre_rom3 <= sram_rom3;
                end if;
             elsif mmu_A21_A13(8) = '0' then
                sram_pre_A20_A13 <= mmu_A21_A13(7 downto 0);
@@ -2585,6 +2700,9 @@ begin
          sram_romcs_en <= '0';
       end if;
    end process;
+   
+   sram_obscure_divmmc_automap <= sram_config_active or mf_mem_en;
+   sram_disable_divmmc_automap <= sram_obscure_divmmc_automap or ((not divmmc_automap_held) and (layer2_map_en or sram_romcs or (altrom_en and sram_pre_alt_128) or ((not altrom_en) and not sram_pre_rom3)));
    
    --
    -- generate memory cycle in top level sram, bram banks 5/7, bootrom
@@ -2964,47 +3082,29 @@ begin
    port_133b_dat <= "00000" & port_133b_dat_20;
    
    -- fifo memory, share a single bram unit
-   
-   ---- Desactivo por no caber en la BRAM
-   
-    uart_fifo_rx: entity work.tdpram
-    generic map 
-    (
-       addr_width_g  => 10,
-       data_width_g  => 8
-    )
-    port map 
-    (
-       -- uart 0
-       clk_a_i  => i_CLK_28,
-       we_a_i   => uart0_fifo_we,
-       addr_a_i => '0' & uart0_fifo_addr,
-       data_a_i => uart0_rx_byte_dly,
-       data_a_o => uart0_rx_o,
-       -- uart 1
-       clk_b_i  => i_CLK_28,
-       we_b_i   => uart1_fifo_we,
-       addr_b_i => '1' & uart1_fifo_addr,
-       data_b_i => uart1_rx_byte_dly,
-       data_b_o => uart1_rx_o
-    );
-
---    ram2port_inst :  entity work.ram2port 
---		PORT MAP (
---		
---			clock_a	 => i_CLK_28,
---			wren_a	 => uart0_fifo_we,
---			address_a => '0' & uart0_fifo_addr,
---			data_a	 => uart0_rx_byte_dly,
---			q_a	 	 => uart0_rx_o,
---			------------------------------
---			clock_b	 => i_CLK_28,
---			wren_b	 => uart1_fifo_we,
---			address_b => '1' & uart1_fifo_addr,
---			data_b	 => uart1_rx_byte_dly,
---			q_b	 	 => uart1_rx_o
---	);
-
+   -- Desactivo por no caber en la bram
+	
+--   uart_fifo_rx: entity work.tdpram
+--   generic map 
+--   (
+--      addr_width_g  => 10,
+--      data_width_g  => 8
+--   )
+--   port map 
+--   (
+--      -- uart 0
+--      clk_a_i  => i_CLK_28,
+--      we_a_i   => uart0_fifo_we,
+--      addr_a_i => '0' & uart0_fifo_addr,
+--      data_a_i => uart0_rx_byte_dly,
+--      data_a_o => uart0_rx_o,
+--      -- uart 1
+--      clk_b_i  => i_CLK_28,
+--      we_b_i   => uart1_fifo_we,
+--      addr_b_i => '1' & uart1_fifo_addr,
+--      data_b_i => uart1_rx_byte_dly,
+--      data_b_o => uart1_rx_o
+--   );
 
    -- cpu read has priority over uart write
    
@@ -3129,13 +3229,17 @@ begin
    process (i_CLK_CPU)
    begin
       if falling_edge(i_CLK_CPU) then
-         port_fe_dat_0 <= '1' & ((not i_AUDIO_EAR) xor pi_fe_ear xor (port_fe_ear or (port_fe_mic and nr_08_keyboard_issue2))) & '1' & (i_KBD_COL and joy_key);
+         if port_fe_override = '0' or expbus_eff_en = '0' or port_propagate_fe = '0' then
+            port_fe_dat_0 <= '1' & ((not i_AUDIO_EAR) xor pi_fe_ear xor (port_fe_ear or (port_fe_mic and nr_08_keyboard_issue2))) & '1' & (i_KBD_COL and joy_key);
+         else
+            port_fe_dat_0 <= X"FF";
+         end if;
       end if;
    end process;
-   
+
    -- legacy external peripherals are slow so we have to allow reading until the last moment
-   
-   port_fe_dat <= port_fe_dat_0(7 downto 5) & (port_fe_dat_0(4 downto 0) and port_fe_bus(4 downto 0));
+
+   port_fe_dat <= port_fe_dat_0 and port_fe_bus;
 
    -- other joysticks
    
@@ -3230,6 +3334,7 @@ begin
    -- 7FFD, DFFD, 1FFD : 128K MEMORY PAGING
    -- 123B : LAYER 2 CONTROL
    -- COPPER
+   -- CTC
    -- DIVMMC
    -- LAYER 2
    -- LORES
@@ -3535,22 +3640,6 @@ begin
       data_b_o => copper_instr_data(15 downto 8)
    );
 
-	
---	copper_inst_msb_ram: entity work.dpram2_Altera
---	PORT MAP (
---		-- CPU port
---		wrclock	 		=> i_CLK_28,
---		wren	 			=> copper_msb_we,
---		wraddress		=> nr_copper_addr(10 downto 1),
---		data	 			=> copper_msb_dat,
---		-- Copper Instructions
---		rdclock	 		=> i_CLK_28_n,
---		rdaddress	 	=> copper_instr_addr,
---		q	 				=> copper_instr_data(15 downto 8)
---	);
-
-	
-	
    copper_msb_we <= '1' when nr_copper_we = '1' and ((nr_copper_write_8 = '0' and nr_copper_addr(0) = '1') or (nr_copper_write_8 = '1' and nr_copper_addr(0) = '0')) else '0';
    copper_msb_dat <= nr_wr_dat when nr_copper_write_8 = '1' else nr_copper_data_stored;
    
@@ -3576,13 +3665,49 @@ begin
    copper_lsb_dat <= nr_wr_dat;
 
    --
+   -- CTC (COUNTER / TIMER CIRCUIT)
+   --
+
+   ctc_mod: entity work.ctc
+   port map
+   (
+      i_CLK          => i_CLK_28,
+      i_reset        => reset,
+      
+      i_port_ctc_wr  => port_ctc_wr,
+      i_port_ctc_sel => cpu_a(10 downto 8),
+
+      i_int_en_wr    => nr_c6_we,
+      i_int_en       => nr_wr_dat,
+
+      i_cpu_d        => cpu_do,
+      o_cpu_d        => ctc_do,
+      
+      i_clk_trg      => ctc_zc_to(6 downto 0) & ctc_zc_to(7),
+      
+      o_im2_vector_wr  => open,
+      
+      o_zc_to        => ctc_zc_to,
+      o_int_en       => ctc_int_en
+   );
+   
+   process (i_CLK_CPU)
+   begin
+      if falling_edge(i_CLK_CPU) then
+         port_ctc_dat <= ctc_do;
+      end if;
+   end process;
+   
+   ctc_int <= ctc_int_en and ctc_zc_to;
+   ctc_int_n <= (not port_ctc_io_en) or not (ctc_int(7) or ctc_int(6) or ctc_int(5) or ctc_int(4) or ctc_int(3) or ctc_int(2) or ctc_int(1) or ctc_int(0));
+   
+   --
    -- DIVMMC
    --
    
    -- divmmc normally includes an spi interface to the sd card but on the next
    -- the spi interface is implemented separately
-   
-   -- todo: enable automap only if ROM3 is present (?)
+
    -- todo: add sets of automap entry points for trapping different systems
    
    divmmc_mod: entity work.divmmc
@@ -3591,16 +3716,26 @@ begin
       reset_i              => reset,
       clock_i              => i_CLK_28,
       
-      enable_i             => port_divmmc_io_en or divmmc_nmi_hold,
+      enable_i             => port_divmmc_io_en,
       
-      cpu_a_i              => cpu_a,
+      cpu_a_15_13_i        => cpu_a(15 downto 13),
       cpu_mreq_n_i         => cpu_mreq_n,
       cpu_m1_n_i           => cpu_m1_n,
       
       divmmc_button_i      => nmi_divmmc_button,
       
-      disable_automap_i    => not nr_06_divmmc_automap_en,
+      reset_automap_i      => not nr_06_divmmc_automap_en,
+      hide_automap_i       => sram_disable_divmmc_automap,
+      obscure_automap_i    => sram_obscure_divmmc_automap,
+      
+      automap_en_instant_i             => divmmc_automap_en_instant,
+      automap_en_delayed_i             => divmmc_automap_en_delayed,
+      automap_en_delayed_nohide_i      => divmmc_automap_en_delayed_nohide,
+      automap_en_delayed_nohide_nmi_i  => divmmc_automap_en_delayed_nohide_nmi,
+      automap_dis_delayed_i            => divmmc_automap_dis_delayed,
+
       disable_nmi_o        => divmmc_nmi_hold,
+      automap_held_o       => divmmc_automap_held,
       
       divmmc_reg_i         => port_e3_reg,
       
@@ -3718,7 +3853,11 @@ begin
       reset_i              => reset,
       clock_i              => i_CLK_28,
       
-      cpu_a_i              => cpu_a,
+      cpu_a_0066_i         => mf_a_0066,
+      cpu_a_1fxx_i         => mf_a_1fxx,
+      cpu_a_7fxx_i         => mf_a_7fxx,
+      cpu_a_fexx_i         => mf_a_fexx,
+      
       cpu_mreq_n_i         => cpu_mreq_n,
       cpu_m1_n_i           => cpu_m1_n,
       
@@ -3726,25 +3865,24 @@ begin
       port_7ffd_i          => port_7ffd_dat,
       port_fe_border_i     => port_fe_border,
       
-      enable_i             => port_multiface_io_en or mf_mem_en,
+      enable_i             => port_multiface_io_en,
       button_i             => nmi_mf_button,
-      
-      mode_48_i            => machine_type_48,
-      mode_128_i           => machine_type_128,
-      mode_p3_i            => machine_type_p3,
+
+      mf_mode_i            => nr_0a_mf_type,
       
       port_mf_enable_rd_i  => port_mf_enable_rd,
       port_mf_enable_wr_i  => port_mf_enable_wr,
       port_mf_disable_rd_i => port_mf_disable_rd,
       port_mf_disable_wr_i => port_mf_disable_wr,
       
-      nmi_active_o         => mf_nmi_hold,
-      
-      mf_mem_en_o          => mf_mem_en,
+      nmi_disable_o        => mf_nmi_hold,
+      mf_enabled_o         => mf_mem_en,
       
       mf_port_en_o         => mf_port_en,
       mf_port_dat_o        => mf_port_dat
    );
+   
+   mf_is_active <= mf_mem_en or mf_nmi_hold;
    
    --
    -- SPRITES
@@ -3816,6 +3954,7 @@ begin
       
       -- ULA Bank 5 Memory Interface
       
+      tm_mem_bank7_o       => tm_mem_bank7,
       tm_mem_addr_o        => tm_vram_a,
       tm_mem_rd_o          => tm_vram_rd,
       tm_mem_ack_i         => tm_vram_ack,
@@ -3823,8 +3962,8 @@ begin
    
       -- Memory Map
       
-      tm_map_base_i        => nr_6e_tilemap_base,
-      tm_tile_base_i       => nr_6f_tilemap_tiles,
+      tm_map_base_i        => nr_6e_tilemap_base_7 & nr_6e_tilemap_base,
+      tm_tile_base_i       => nr_6f_tilemap_tiles_7 & nr_6f_tilemap_tiles,
       
       -- Out
       
@@ -4229,6 +4368,7 @@ begin
       nr_8c_we <= '0';
       nr_8e_we <= '0';
       nr_8f_we <= '0';
+      nr_c6_we <= '0';
       nr_ff_we <= '0';
 
       nr_sprite_mirror_we <= '0';
@@ -4295,6 +4435,7 @@ begin
             when X"8C" => nr_8c_we <= '1';
             when X"8E" => nr_8e_we <= '1';
             when X"8F" => nr_8f_we <= '1';
+            when X"C6" => nr_c6_we <= '1';
             when X"FF" => nr_ff_we <= '1';
             
             when others => null;
@@ -4432,8 +4573,10 @@ begin
             
             nr_6c_tm_default_attr <= (others => '0');
             
+            nr_6e_tilemap_base_7 <= '0';
             nr_6e_tilemap_base <= "101100";
             
+            nr_6f_tilemap_tiles_7 <= '0';
             nr_6f_tilemap_tiles <= "001100";
             
             nr_70_layer2_resolution <= "00";
@@ -4448,7 +4591,7 @@ begin
                nr_82_internal_port_enable <= (others => '1');
                nr_83_internal_port_enable <= (others => '1');
                nr_84_internal_port_enable <= (others => '1');
-               nr_85_internal_port_enable <= "111";
+               nr_85_internal_port_enable <= "1111";
             
             end if;
 
@@ -4457,7 +4600,7 @@ begin
                nr_86_bus_port_enable <= (others => '1');
                nr_87_bus_port_enable <= (others => '1');
                nr_88_bus_port_enable <= (others => '1');
-               nr_89_bus_port_enable <= "111";
+               nr_89_bus_port_enable <= "1111";
             
             end if;
 
@@ -4504,11 +4647,14 @@ begin
                nr_09_psg_mono <= (others => '0');
                nr_09_hdmi_audio_disable <= '0';
                
+               nr_0a_mf_type <= "00";
                nr_0a_mouse_button_reverse <= '0';
                nr_0a_mouse_dpi <= "01";
                
                nr_10_flashboot <= '0';
                
+               nr_81_expbus_ula_override <= '0';
+               nr_81_expbus_nmi_debounce_disable <= '0';
                nr_81_expbus_clken <= '0';
                nr_81_expbus_speed <= (others => '0');
 
@@ -4597,7 +4743,10 @@ begin
 --                nr_09_we <= '1';
 
                when X"0A" =>
-                  nr_0a_mouse_button_reverse <= nr_wr_dat(2);
+                  if machine_type_config = '1' then
+                     nr_0a_mf_type <= nr_wr_dat(7 downto 6);
+                  end if;
+                  nr_0a_mouse_button_reverse <= nr_wr_dat(3);
                   nr_0a_mouse_dpi <= nr_wr_dat(1 downto 0);
                
                when X"10" =>
@@ -4857,9 +5006,11 @@ begin
                   nr_6c_tm_default_attr <= nr_wr_dat;
                
                when X"6E" =>
+                  nr_6e_tilemap_base_7 <= nr_wr_dat(7);
                   nr_6e_tilemap_base <= nr_wr_dat(5 downto 0);
                
                when X"6F" =>
+                  nr_6f_tilemap_tiles_7 <= nr_wr_dat(7);
                   nr_6f_tilemap_tiles <= nr_wr_dat(5 downto 0);
                
                when X"70" =>
@@ -4879,6 +5030,8 @@ begin
 --                nr_80_we <= '1';
 
                when X"81" =>
+                  nr_81_expbus_ula_override <= nr_wr_dat(6);
+                  nr_81_expbus_nmi_debounce_disable <= nr_wr_dat(5);
                   nr_81_expbus_clken <= nr_wr_dat(4);
                   nr_81_expbus_speed <= "00";   -- nr_wr_dat(1 downto 0);
                
@@ -4892,7 +5045,7 @@ begin
                   nr_84_internal_port_enable <= nr_wr_dat;
                
                when X"85" =>
-                  nr_85_internal_port_enable <= nr_wr_dat(2 downto 0);
+                  nr_85_internal_port_enable <= nr_wr_dat(3 downto 0);
                   nr_85_internal_port_reset_type <= nr_wr_dat(7);
                
                when X"86" =>
@@ -4905,7 +5058,7 @@ begin
                   nr_88_bus_port_enable <= nr_wr_dat;
                
                when X"89" =>
-                  nr_89_bus_port_enable <= nr_wr_dat(2 downto 0);
+                  nr_89_bus_port_enable <= nr_wr_dat(3 downto 0);
                   nr_89_bus_port_reset_type <= nr_wr_dat(7);
                   
                when X"8A" =>
@@ -4964,6 +5117,12 @@ begin
 
 --             when X"B1" =>
 --                read only extended keys
+
+--             when X"C6" =>
+--                nr_c6_we <= '1';
+
+--             when X"FF" =>
+--                reserved for ula+
 
                when others =>
                   null;
@@ -5139,7 +5298,7 @@ begin
                port_253b_dat <= nr_09_psg_mono & nr_09_sprite_tie & '0' & nr_09_hdmi_audio_disable & eff_nr_09_scanlines;
 
             when X"0A" =>
-               port_253b_dat <= "00000" & nr_0a_mouse_button_reverse & nr_0a_mouse_dpi;
+               port_253b_dat <= nr_0a_mf_type & "00" & nr_0a_mouse_button_reverse & '0' & nr_0a_mouse_dpi;
  
             when X"0E" =>
                port_253b_dat <= std_logic_vector(g_sub_version);
@@ -5326,10 +5485,10 @@ begin
                port_253b_dat <= nr_6c_tm_default_attr;
          
             when X"6E" =>
-               port_253b_dat <= "00" & nr_6e_tilemap_base;
+               port_253b_dat <= nr_6e_tilemap_base_7 & '0' & nr_6e_tilemap_base;
          
             when X"6F" =>
-               port_253b_dat <= "00" & nr_6f_tilemap_tiles;
+               port_253b_dat <= nr_6f_tilemap_tiles_7 & '0' & nr_6f_tilemap_tiles;
             
             when X"70" =>
                port_253b_dat <= "00" & nr_70_layer2_resolution & nr_70_layer2_palette_offset;
@@ -5344,7 +5503,7 @@ begin
                port_253b_dat <= nr_80_expbus;
             
             when X"81" =>
-               port_253b_dat <= i_BUS_ROMCS_n & "00" & nr_81_expbus_clken & "00" & nr_81_expbus_speed;
+               port_253b_dat <= i_BUS_ROMCS_n & nr_81_expbus_ula_override & nr_81_expbus_nmi_debounce_disable & nr_81_expbus_clken & "00" & nr_81_expbus_speed;
             
             when X"82" =>
                port_253b_dat <= nr_82_internal_port_enable;
@@ -5356,7 +5515,7 @@ begin
                port_253b_dat <= nr_84_internal_port_enable;
             
             when X"85" =>
-               port_253b_dat <= nr_85_internal_port_reset_type & "0000" & nr_85_internal_port_enable;
+               port_253b_dat <= nr_85_internal_port_reset_type & "000" & nr_85_internal_port_enable;
             
             when X"86" =>
                port_253b_dat <= nr_86_bus_port_enable;
@@ -5368,7 +5527,7 @@ begin
                port_253b_dat <= nr_88_bus_port_enable;
 
             when X"89" =>
-               port_253b_dat <= nr_89_bus_port_reset_type & "0000" & nr_89_bus_port_enable;
+               port_253b_dat <= nr_89_bus_port_reset_type & "000" & nr_89_bus_port_enable;
             
             when X"8A" =>
                port_253b_dat <= "00" & nr_8a_bus_port_propagate;
@@ -5432,6 +5591,9 @@ begin
                -- DELETE EDIT BREAK INV TRU GRAPH CAPSLOCK EXTEND
                port_253b_dat <= i_KBD_EXTENDED_KEYS(12) & i_KBD_EXTENDED_KEYS(7 downto 2) & i_KBD_EXTENDED_KEYS(0);
 
+            when X"C6" =>
+               port_253b_dat <= ctc_int_en;
+            
             when others =>
                port_253b_dat <= (others => '0');
 
@@ -5483,9 +5645,11 @@ begin
    hotkey_scandouble <= hotkeys_0(2) and not hotkeys_1(2);                         -- F2
    hotkey_5060 <= hotkeys_0(3) and not hotkeys_1(3);                               -- F3
    hotkey_soft_reset <= hotkeys_0(4) and not hotkeys_1(4);                         -- F4
+   hotkey_expbus_enable <= hotkeys_0(5) and not hotkeys_1(5);                      -- F5
+   hotkey_expbus_disable <= hotkeys_0(6) and not hotkeys_1(6);                     -- F6
    hotkey_scanlines <= hotkeys_0(7) and not hotkeys_1(7);                          -- F7
    hotkey_cpu_speed <= hotkeys_0(8) and not hotkeys_1(8);                          -- F8
-   hotkey_m1 <= hotkeys_0(9) and not hotkeys_1(9) and port_multiface_io_en;        -- F9
+   hotkey_m1 <= hotkeys_0(9) and not hotkeys_1(9);                                 -- F9
    hotkey_drive <= hotkeys_0(10) and not hotkeys_1(10) and port_divmmc_io_en;      -- F10
 
    nr_02_soft_reset <= hotkey_soft_reset or (nr_02_we and nr_wr_dat(0));
@@ -5583,7 +5747,7 @@ begin
    
    -- i2s pi audio
    
-   i2s_mod : entity work.i2s_next
+   i2s_mod : entity work.zx_i2s
    port map
    (
       i_reset        => reset or not pi_i2s_en,
@@ -5617,6 +5781,7 @@ begin
       o_audio_pi_R   => pi_i2s_audio_R
    );
 
+   -- todo: switch to signed audio
    -- todo: power of two volume adjustment on all inputs (?)
    
    port_fe_mic_final <= port_fe_mic xor i_AUDIO_EAR xor pi_fe_ear;
@@ -5691,7 +5856,7 @@ begin
       data_a_o => vram_bank5_do0,
       -- ULA port
       clk_b_i  => i_CLK_28_n,
-      addr_b_i => vram_bank5_a1,
+      addr_b_i => vram_bank_a1,
       data_b_o => vram_bank5_do1
    );
    
@@ -5748,36 +5913,41 @@ begin
    lores_vram_ack <= '1' when cpu_bank5_sched = '0' and lores_vram_req = '1' else '0'; 
    vram_bank5_a0 <= (sram_A20_A13(0) & cpu_a(12 downto 0)) when cpu_bank5_sched = '1' else lores_addr;
    
-   -- Arbitrate ula,tilemap on second port
+   -- Arbitrate ula,tilemap on second port in both banks 5 and 7
    
-   ula_bank5_req <= '1' when ula_vram_shadow = '0' and ula_vram_rd = '1' else '0';
+   ula_bank_req <= ula_vram_rd;
    
    process (i_CLK_28_n)
    begin
       if rising_edge(i_CLK_28_n) then
-         ula_bank5_req_dly <= ula_bank5_req;
-         ula_bank5_sched_dly <= ula_bank5_sched;
+         ula_bank_req_dly <= ula_bank_req;
+         ula_bank_sched_dly <= ula_bank_sched;
       end if;
    end process;
    
-   ula_bank5_sched <= '1' when ula_bank5_req_dly = '0' and ula_bank5_req = '1' else '0';
+   ula_bank_sched <= '1' when ula_bank_req_dly = '0' and ula_bank_req = '1' else '0';
    
    process (i_CLK_28_n)
    begin
       if falling_edge(i_CLK_28_n) then
-         if ula_bank5_sched_dly = '1' then
-            ula_bank5_do <= vram_bank5_do1;
+         if ula_bank_sched_dly = '1' then
+            if ula_vram_shadow = '0' then
+               ula_bank_do <= vram_bank5_do1;
+            else
+               ula_bank_do <= vram_bank7_do;
+            end if;
          end if;
       end if;
    end process;
 
-   vram_bank5_a1 <= ula_vram_a when ula_bank5_sched = '1' else tm_vram_a;
+   vram_bank_a1 <= ula_vram_a when ula_bank_sched = '1' else tm_vram_a;
+   ula_vram_di <= ula_bank_do;
 
-   tm_vram_di <= vram_bank5_do1;
-   tm_vram_ack <= '1' when ula_bank5_sched = '0' and tm_vram_rd = '1' else '0';
+   tm_vram_di <= vram_bank5_do1 when tm_mem_bank7 = '0' else vram_bank7_do;
+   tm_vram_ack <= '1' when ula_bank_sched = '0' and tm_vram_rd = '1' else '0';
    
    -- ULA BANK 7 (8k only due to limited bram resources)
-   -- cpu has access through one port and the ula through the other.
+   -- cpu has access through one port and the ula/tilemap through the other.
    -- A consequence of only having the first 8k here is that the timex video modes cannot be placed in bank 7.
    
    bank7_ram: entity work.dpram2
@@ -5794,11 +5964,9 @@ begin
       data_a_o => cpu_bank7_do,
       -- ULA port
       clk_b_i  => i_CLK_28_n,
-      addr_b_i => ula_vram_a(12 downto 0),
+      addr_b_i => vram_bank_a1(12 downto 0),
       data_b_o => vram_bank7_do
    );
-
-   ula_vram_di <= ula_bank5_do when ula_vram_shadow = '0' else vram_bank7_do;
 
    --
    -- VIDEO TIMING & VBI/LINE INTERRUPT GENERATION
@@ -5869,7 +6037,7 @@ begin
          if reset = '1' then
             ula_int_n <= '1';
          elsif ula_int_n = '1' then
-            if ula_int_pulse_n = '0' then
+            if ula_int_pulse_n = '0' or ctc_int_n = '0' then
                ula_int_n <= '0';
             end if;
          elsif ula_int_count_end = '1' then

@@ -351,21 +351,6 @@ begin
     data_b_o => sprite_attr_0
  );
 
- 
--- attr0 : entity work.sdpram_Altera 
--- PORT MAP (
---		clock			=> clock_master_180o_i,
---		wren	 		=> attr0_we,
---		wraddress	=> attr_a,
---		data	 		=> attr_data,
---		--
---		rdaddress	=> spr_attr_a,
---		q	 			=> sprite_attr_0
---	);
-
- 
- 
- 
    -- simple dual port ram (sync write, async read)
    -- Y position (bits 7:0)
    
@@ -483,7 +468,7 @@ begin
    -----------------------------
 
    -- single port ram (sync write, async read)
---   
+   
 --   linebuf0 : spram_320_9
 --   port map (
 --      CLK  => clock_master_180o_i,

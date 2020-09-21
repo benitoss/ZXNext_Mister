@@ -106,7 +106,7 @@ architecture z80dma_unit of z80dma is
    type dma_seq_t is ( IDLE, START_DMA, WAITING_ACK, TRANSFERING_READ_1, TRANSFERING_READ_2, TRANSFERING_READ_3, TRANSFERING_READ_4, TRANSFERING_WRITE_1, TRANSFERING_WRITE_2, TRANSFERING_WRITE_3, TRANSFERING_WRITE_4, WAITING_CYCLES, FINISH_DMA );
    signal dma_seq_s        : dma_seq_t;
    
-   signal dma_a_s          : std_logic_vector(15 downto 0) := X"FF00"; -- X"00FF";
+   signal dma_a_s          : std_logic_vector(15 downto 0) := X"FF00"; -- X"FF00" X"00FF";
    signal dma_d_s          : std_logic_vector(7 downto 0);
    signal dma_d_n_s        : std_logic_vector(7 downto 0);
    signal dma_d_p_s        : std_logic_vector(7 downto 0);

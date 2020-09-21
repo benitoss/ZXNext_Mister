@@ -649,6 +649,8 @@ architecture rtl of ZXNEXT_Mister is
    signal bus_clk_cpu            : std_logic;
    signal bus_clk_cpu_en_n       : std_logic;
    
+   signal zxn_bus_nmi_debounce_disable  : std_logic;
+
     -- zxdos Bus adaptation ------------------------------------------------------
    signal bus_rst_n_io      : std_logic                      := 'Z';
    signal bus_clk35_o       : std_logic                      := 'Z';
@@ -1068,9 +1070,6 @@ begin
       O => CLK_i0
    );
 
---	CLK_i0 <= CLK_7 when zxn_cpu_speed(0) = '1' else CLK_3M5_CONT;
-
-
    BUFGMUX1_i1 : entity work.BUFGMUX1
    port map
    (
@@ -1080,9 +1079,6 @@ begin
       O => CLK_i1
    );
    
---	CLK_i1 <= CLK_28 when zxn_cpu_speed(0) = '1' else CLK_14;
-
-	
    BUFGMUX1_i2 : entity work.BUFGMUX1
    port map
    (
@@ -1091,9 +1087,6 @@ begin
       S => zxn_cpu_speed(1),
       O => CLK_CPU
    );
-
---	CLK_CPU <= CLK_i1 when zxn_cpu_speed(1) = '1' else CLK_i0;
-
 
    -- Clock Enables
    
@@ -1840,14 +1833,11 @@ begin
    -- todo: add sensitivity adjustment for old ps2 mice
    -- todo: look at driving a 1 when mouse outputs a 1
    
---   ps2_mouse_data_in <= ps2_pin2_io when zxn_ps2_mode = '0' else ps2_data_io;
---   ps2_mouse_clock_in <= ps2_pin6_io when zxn_ps2_mode = '0' else ps2_clk_io;
-	
+
+
 	ps2_mouse_data_in <= ps2_pin2_i when zxn_ps2_mode = '0' else ps2_data_i;
    ps2_mouse_clock_in <= ps2_pin6_i when zxn_ps2_mode = '0' else ps2_clk_i;
 	
---	ps2_mouse_data_in <= ps2_pin2_io;
--- ps2_mouse_clock_in <= ps2_pin6_io;
 
    process (CLK_28)
    begin
@@ -1894,34 +1884,21 @@ begin
       mthird      => zxn_mouse_button(2)
    );
    
---   ps2_data_io <= ps2_kbd_data_out when (ps2_kbd_data_out_en = '1' and zxn_ps2_mode = '0') else '0' when (ps2_mouse_data_out = '0' and zxn_ps2_mode = '1') else 'Z';
---   ps2_clk_io <= ps2_kbd_clock_out when (ps2_kbd_clock_out_en = '1' and zxn_ps2_mode = '0') else '0' when (ps2_mouse_clock_out = '0' and zxn_ps2_mode = '1') else 'Z';
-	
+
 	ps2_data_o <= ps2_kbd_data_out when (ps2_kbd_data_out_en = '1' and zxn_ps2_mode = '0') else '0' when (ps2_mouse_data_out = '0' and zxn_ps2_mode = '1') else 'Z';
    ps2_clk_o <= ps2_kbd_clock_out when (ps2_kbd_clock_out_en = '1' and zxn_ps2_mode = '0') else '0' when (ps2_mouse_clock_out = '0' and zxn_ps2_mode = '1') else 'Z';
 	
---	ps2_data_io <= ps2_kbd_data_out  when (ps2_kbd_data_out_en = '1' ) else 'Z';
--- ps2_clk_io  <= ps2_kbd_clock_out when (ps2_kbd_clock_out_en = '1') else 'Z';
-   
---   ps2_pin2_io <= '0' when (ps2_mouse_data_out = '0' and zxn_ps2_mode = '0') else ps2_kbd_data_out when (ps2_kbd_data_out_en = '1' and zxn_ps2_mode = '1') else 'Z';
---   ps2_pin6_io <= '0' when (ps2_mouse_clock_out = '0' and zxn_ps2_mode = '0') else ps2_kbd_clock_out when (ps2_kbd_clock_out_en = '1' and zxn_ps2_mode = '1') else 'Z';
-	
+
 	ps2_pin2_o <= '0' when (ps2_mouse_data_out = '0' and zxn_ps2_mode = '0') else ps2_kbd_data_out when (ps2_kbd_data_out_en = '1' and zxn_ps2_mode = '1') else 'Z';
    ps2_pin6_o <= '0' when (ps2_mouse_clock_out = '0' and zxn_ps2_mode = '0') else ps2_kbd_clock_out when (ps2_kbd_clock_out_en = '1' and zxn_ps2_mode = '1') else 'Z';
 
---	ps2_data_io <= ps2_kbd_data_out  when (ps2_kbd_data_out_en  = '1') else 'Z';
--- ps2_clk_io  <= ps2_kbd_clock_out when (ps2_kbd_clock_out_en = '1') else 'Z';
    
    -- ps2 keyboard
    
---   ps2_kbd_data_in <= ps2_data_io when zxn_ps2_mode = '0' else ps2_pin2_io;
---   ps2_kbd_clock_in <= ps2_clk_io when zxn_ps2_mode = '0' else ps2_pin6_io;
-	
+
 	ps2_kbd_data_in <= ps2_data_i when zxn_ps2_mode = '0' else ps2_pin2_i;
    ps2_kbd_clock_in <= ps2_clk_i when zxn_ps2_mode = '0' else ps2_pin6_i;
 	
---	ps2_kbd_data_in  <= ps2_data_io ;
---   ps2_kbd_clock_in <= ps2_clk_io  ;
    
    ps2_kbd_mod : entity work.ps2_keyb
    generic map
@@ -2264,6 +2241,8 @@ begin
    --  F2 = toggle scandoubler, hdmi reset
    --  F3 = toggle 50Hz / 60Hz display
    --  F4 = soft reset
+   --  F5 = (temporary) expansion bus on
+   --  F6 = (temporary) expansion bus off
    --  F7 = change scanline weight
    --  F8 = change cpu speed
    --  F9 = m1 button (multiface nmi)
@@ -2451,6 +2430,7 @@ begin
       o_BUS_EN             => zxn_bus_en,
       o_BUS_CLKEN          => zxn_bus_clken,
 
+      o_BUS_NMI_DEBOUNCE_DISABLE  => zxn_bus_nmi_debounce_disable,
       -- ESP GPIO
       
       i_ESP_GPIO_20        => zxn_esp_gpio20_i,

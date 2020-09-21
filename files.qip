@@ -50,3 +50,5 @@ set_global_assignment -name VERILOG_FILE rtl/ram/sram.v
 set_global_assignment -name VHDL_FILE rtl/ram/BUFGMUX1.vhd
 set_global_assignment -name VHDL_FILE rtl/zxnext.vhd
 set_global_assignment -name VHDL_FILE rtl/zxnext_Mister.vhd
+set_global_assignment -name VHDL_FILE rtl/device/ctc_chan.vhd
+set_global_assignment -name VHDL_FILE rtl/device/ctc.vhd

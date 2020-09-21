@@ -54,7 +54,11 @@ entity multiface is
       reset_i              : in std_logic;
       clock_i              : in std_logic;
       
-      cpu_a_i              : in std_logic_vector(15 downto 0);
+      cpu_a_0066_i         : in std_logic;
+      cpu_a_1fxx_i         : in std_logic;
+      cpu_a_7fxx_i         : in std_logic;
+      cpu_a_fexx_i         : in std_logic;
+      
       cpu_mreq_n_i         : in std_logic;
       cpu_m1_n_i           : in std_logic;
       
@@ -65,18 +69,15 @@ entity multiface is
       enable_i             : in std_logic;
       button_i             : in std_logic;
       
-      mode_48_i            : in std_logic;
-      mode_128_i           : in std_logic;
-      mode_p3_i            : in std_logic;
+      mf_mode_i            : in std_logic_vector(1 downto 0);  -- 00 = mf +3, 11 = mf 48, else mf 128
       
       port_mf_enable_rd_i  : in std_logic;
       port_mf_enable_wr_i  : in std_logic;
       port_mf_disable_rd_i : in std_logic;
       port_mf_disable_wr_i : in std_logic;
       
-      nmi_active_o         : out std_logic;
-      
-      mf_mem_en_o          : out std_logic;
+      nmi_disable_o        : out std_logic;
+      mf_enabled_o         : out std_logic;
       
       mf_port_en_o         : out std_logic;
       mf_port_dat_o        : out std_logic_vector(7 downto 0)
@@ -86,6 +87,10 @@ end entity;
 architecture rtl of multiface is
 
    signal reset            : std_logic;
+   
+   signal mode_48          : std_logic;
+   signal mode_128         : std_logic;
+   signal mode_p3          : std_logic;
    
    signal port_io_dly      : std_logic;
    
@@ -102,6 +107,21 @@ architecture rtl of multiface is
 begin
 
    reset <= reset_i or not enable_i;
+   
+   process (mf_mode_i)
+   begin
+      
+      mode_48 <= '0';
+      mode_128 <= '0';
+      mode_p3 <= '0';
+      
+      case mf_mode_i is
+         when "00"   => mode_p3 <= '1';
+         when "11"   => mode_48 <= '1';
+         when others => mode_128 <= '1';
+      end case;
+
+   end process;
 
    -- edge detection on port io
    
@@ -127,14 +147,12 @@ begin
             nmi_active <= '0';
          elsif button_pulse = '1' then
             nmi_active <= '1';
-         elsif (port_mf_enable_wr_i = '1' or port_mf_disable_wr_i = '1' or (port_mf_disable_rd_i = '1' and mode_p3_i = '1')) and port_io_dly = '0' then
+         elsif (port_mf_enable_wr_i = '1' or port_mf_disable_wr_i = '1' or (port_mf_disable_rd_i = '1' and mode_p3 = '1')) and port_io_dly = '0' then
             nmi_active <= '0';
          end if;
       end if;
    end process;
-   
-   nmi_active_o <= nmi_active;
-   
+
    -- invisible (1 = invisible)
    
    process (clock_i)
@@ -144,17 +162,17 @@ begin
             invisible <= '1';
          elsif button_pulse = '1' then
             invisible <= '0';
-         elsif ((port_mf_disable_wr_i = '1' and mode_p3_i = '0') or (port_mf_enable_wr_i = '1' and mode_p3_i = '1')) and port_io_dly = '0' then
+         elsif ((port_mf_disable_wr_i = '1' and mode_p3 = '0') or (port_mf_enable_wr_i = '1' and mode_p3 = '1')) and port_io_dly = '0' then
             invisible <= '1';
          end if;
       end if;
    end process;
    
-   invisible_eff <= invisible and not mode_48_i;
+   invisible_eff <= invisible and not mode_48;
 
    -- mf_enable (1 = memory paged in)
    
-   fetch_66 <= '1' when cpu_a_i = X"0066" and cpu_m1_n_i = '0' and nmi_active = '1' else '0';
+   fetch_66 <= '1' when cpu_a_0066_i = '1' and cpu_m1_n_i = '0' and nmi_active = '1' else '0';
    
    process (clock_i)
    begin
@@ -175,11 +193,12 @@ begin
    
    -- multiface memory
    
-   mf_mem_en_o <= '1' when cpu_a_i(15 downto 14) = "00" and mf_enable_eff = '1' else '0';
+   mf_enabled_o <= mf_enable_eff;
+   nmi_disable_o <= nmi_active;
    
    -- port read
    
-   mf_port_en_o <= '1' when port_mf_enable_rd_i = '1' and invisible_eff = '0' and (mode_128_i = '1' or (mode_p3_i = '1' and (cpu_a_i(15 downto 8) = X"1F" or cpu_a_i(15 downto 8) = X"7F" or cpu_a_i(15 downto 8) = X"FE"))) else '0';
-   mf_port_dat_o <= (port_7ffd_i(3) & "1111111") when mode_128_i = '1' else port_7ffd_i when cpu_a_i(15 downto 8) = X"7F" else port_1ffd_i when cpu_a_i(15 downto 8) = X"1F" else ("00000" & port_fe_border_i);
+   mf_port_en_o <= '1' when port_mf_enable_rd_i = '1' and invisible_eff = '0' and (mode_128 = '1' or (mode_p3 = '1' and (cpu_a_1fxx_i = '1' or cpu_a_7fxx_i = '1' or cpu_a_fexx_i = '1'))) else '0';
+   mf_port_dat_o <= (port_7ffd_i(3) & "1111111") when mode_128 = '1' else port_7ffd_i when cpu_a_7fxx_i = '1' else port_1ffd_i when cpu_a_1fxx_i = '1' else ("00000" & port_fe_border_i);
 
 end architecture;

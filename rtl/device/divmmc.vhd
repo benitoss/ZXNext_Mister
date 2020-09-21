@@ -30,14 +30,24 @@ entity divmmc is
       
       enable_i             : in std_logic;
       
-      cpu_a_i              : in std_logic_vector(15 downto 0);
+      cpu_a_15_13_i        : in std_logic_vector(2 downto 0);
       cpu_mreq_n_i         : in std_logic;
       cpu_m1_n_i           : in std_logic;
       
       divmmc_button_i      : in std_logic;
       
-      disable_automap_i    : in std_logic;
+      reset_automap_i      : in std_logic;
+      hide_automap_i       : in std_logic;
+      obscure_automap_i    : in std_logic;   -- subset of hide_automap_i
+      
+      automap_en_instant_i             : in std_logic;
+      automap_en_delayed_i             : in std_logic;
+      automap_en_delayed_nohide_i      : in std_logic;
+      automap_en_delayed_nohide_nmi_i  : in std_logic;
+      automap_dis_delayed_i            : in std_logic;
+      
       disable_nmi_o        : out std_logic;
+      automap_held_o       : out std_logic;
       
       divmmc_reg_i         : in std_logic_vector(7 downto 0);
       
@@ -56,15 +66,15 @@ architecture rtl of divmmc is
    signal page1      : std_logic;
    signal rom_en     : std_logic;
    signal ram_en     : std_logic;
-   signal rdonly     : std_logic;
    signal ram_bank   : std_logic_vector(3 downto 0);
    
-   signal automap_en_instant  : std_logic;
-   signal automap_en_delayed  : std_logic;
-   signal automap_dis_delayed : std_logic;
+   signal button_nmi : std_logic;
+
+   signal automap_en_delayed_nohide  : std_logic;
    signal automap_reset       : std_logic;
    
    signal automap_hold  : std_logic;
+   signal automap_held  : std_logic;
    signal automap       : std_logic;
 
 begin
@@ -74,26 +84,37 @@ begin
    conmem <= divmmc_reg_i(7);
    mapram <= divmmc_reg_i(6);
    
-   page0 <= '1' when cpu_a_i(15 downto 13) = "000" else '0';
-   page1 <= '1' when cpu_a_i(15 downto 13) = "001" else '0';
+   page0 <= '1' when cpu_a_15_13_i = "000" else '0';
+   page1 <= '1' when cpu_a_15_13_i = "001" else '0';
    
    rom_en <= '1' when (page0 = '1' and (conmem = '1' or (mapram = '0' and automap = '1'))) else '0';
    ram_en <= '1' when (page0 = '1' and conmem = '0' and mapram = '1' and automap = '1') or (page1 = '1' and (conmem = '1' or automap = '1')) else '0';
-   rdonly <= page0;
    ram_bank <= X"3" when page0 = '1' else divmmc_reg_i(3 downto 0);
    
    divmmc_rom_en_o <= rom_en and enable_i;
    divmmc_ram_en_o <= ram_en and enable_i;
-   divmmc_rdonly_o <= rdonly;
+   divmmc_rdonly_o <= page0;
    divmmc_ram_bank_o <= ram_bank;
+
+   -- NMI
+   
+   process (clock_i)
+   begin
+      if rising_edge(clock_i) then
+         if automap_reset = '1' then
+            button_nmi <= '0';
+         elsif divmmc_button_i = '1' then
+            button_nmi<= '1';
+         elsif automap_held = '1' then
+            button_nmi <= '0';
+         end if;
+      end if;
+   end process;
 
    -- Automap
 
-   automap_en_instant <= '1' when cpu_a_i(15 downto 8) = X"3D" else '0';
-   automap_en_delayed <= '1' when cpu_a_i = X"0000" or cpu_a_i = X"0008" or cpu_a_i = X"0038" or (cpu_a_i = X"0066" and divmmc_button_i = '1') or cpu_a_i = X"04C6" or cpu_a_i = X"0562" else '0';
-   automap_dis_delayed <= '1' when cpu_a_i(15 downto 3) = "0001111111111" else '0';
-
-   automap_reset <= reset_i or disable_automap_i or not enable_i;
+   automap_reset <= reset_i or reset_automap_i or not enable_i;
+   automap_en_delayed_nohide <= (automap_en_delayed_nohide_nmi_i and button_nmi) or automap_en_delayed_nohide_i;
    
    process (clock_i)
    begin
@@ -101,20 +122,25 @@ begin
          if automap_reset = '1' then
             automap_hold <= '0';
          elsif cpu_mreq_n_i = '0' and cpu_m1_n_i = '0' then
-            automap_hold <= automap_en_delayed or automap_en_instant or (automap_hold and not automap_dis_delayed);
+            automap_hold <= (automap_en_delayed_nohide and not obscure_automap_i) or ((automap_en_delayed_i or automap_en_instant_i) and not hide_automap_i) or (automap_held and (hide_automap_i or not automap_dis_delayed_i));
+         end if;
+      end if;
+   end process;
+
+   process (clock_i)
+   begin
+      if rising_edge(clock_i) then
+         if automap_reset = '1' then
+            automap_held <= '0';
+         elsif cpu_mreq_n_i = '1' then
+            automap_held <= automap_hold;
          end if;
       end if;
    end process;
    
-   process (cpu_mreq_n_i, automap_reset)
-   begin
-      if automap_reset = '1' then
-         automap <= '0';
-      elsif falling_edge(cpu_mreq_n_i) then
-         automap <= automap_hold or (automap_en_instant and not cpu_m1_n_i);
-      end if;
-   end process;
+   automap <= automap_held or (automap_en_instant_i and (not cpu_m1_n_i) and (not hide_automap_i) and not automap_reset);
    
-   disable_nmi_o <= automap or automap_hold;
+   disable_nmi_o <= automap or button_nmi;
+   automap_held_o <= automap_held;
 
 end architecture;
