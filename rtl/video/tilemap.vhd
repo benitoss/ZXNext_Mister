@@ -44,8 +44,9 @@ entity tilemap is
       default_flags_i      : in std_logic_vector(7 downto 0);  -- default flags if tilemap flags are eliminated
       transp_colour_i      : in std_logic_vector(3 downto 0);
       
-      -- ULA Bank 5 Memory Interface
+      -- ULA Memory Interface
       
+      tm_mem_bank7_o       : out std_logic;
       tm_mem_addr_o        : out std_logic_vector(13 downto 0);
       tm_mem_rd_o          : out std_logic;
       tm_mem_ack_i         : in std_logic;
@@ -53,8 +54,8 @@ entity tilemap is
    
       -- Memory Map
       
-      tm_map_base_i        : in std_logic_vector(5 downto 0);
-      tm_tile_base_i       : in std_logic_vector(5 downto 0);
+      tm_map_base_i        : in std_logic_vector(6 downto 0);   -- bit 6 is bank selector, 5:0 are offsets into 16K
+      tm_tile_base_i       : in std_logic_vector(6 downto 0);   -- bit 6 is bank selector, 5:0 are offsets into 16K
 
       -- Out
       
@@ -122,8 +123,8 @@ architecture rtl of tilemap is
    signal tm_pixel            : std_logic_vector(2 downto 0);
    signal tm_tilemap_0        : std_logic_vector(7 downto 0);
    signal tm_tilemap_1        : std_logic_vector(7 downto 0);
-   signal tm_tile_base_q      : std_logic_vector(5 downto 0);
-   signal tm_map_base_q       : std_logic_vector(5 downto 0);
+   signal tm_tile_base_q      : std_logic_vector(6 downto 0);
+   signal tm_map_base_q       : std_logic_vector(6 downto 0);
    signal tm_strip_flags_q    : std_logic;
    signal textmode_q          : std_logic;
    signal mode_512_q          : std_logic;
@@ -161,7 +162,7 @@ architecture rtl of tilemap is
    signal tm_mem_addr_tile_sub      : std_logic_vector(13 downto 0);
    signal tm_mem_addr_tile_sub_sub  : std_logic_vector(11 downto 0);
    signal tm_mem_addr_sub           : std_logic_vector(13 downto 0);
-   signal tm_mem_addr_offset        : std_logic_vector(5 downto 0);
+   signal tm_mem_addr_offset        : std_logic_vector(6 downto 0);
 
    -- VIDEO OUT
    
@@ -206,7 +207,7 @@ begin
 --      A     => tm_tilemap_pixel_waddr,
 --      D     => tm_tilemap_pixel_wdata
 --   );
-	
+
 	tilemem : entity work.sdpram
     generic map (
     addr_width_g => 4,
@@ -413,7 +414,8 @@ begin
    tm_mem_addr_sub <= tm_mem_addr_pix_sub when state_s = S_READ_PIXELS else tm_mem_addr_tile_sub;
    tm_mem_addr_offset <= tm_tile_base_q when state_s = S_READ_PIXELS else tm_map_base_q;
 
-   tm_mem_addr_o <= (tm_mem_addr_sub(13 downto 8) + tm_mem_addr_offset) & tm_mem_addr_sub(7 downto 0);
+   tm_mem_bank7_o <= tm_mem_addr_offset(6);
+   tm_mem_addr_o <= (tm_mem_addr_sub(13 downto 8) + tm_mem_addr_offset(5 downto 0)) & tm_mem_addr_sub(7 downto 0);
    tm_mem_rd_o <= '0' when state_s = S_IDLE else '1';
 
    ------------------------
