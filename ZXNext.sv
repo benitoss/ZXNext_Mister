@@ -125,11 +125,7 @@ module emu
 
 ///////// Default values for ports not used in this core /////////
 
-//assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
-assign {UART_RTS, UART_TXD, UART_DTR} = 0;
-//assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
-//assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;  
 
 assign AUDIO_S = 0;  // 1 - signed audio samples, 0 - unsigned
@@ -160,16 +156,15 @@ localparam CONF_STR = {
 	"OE,Reset after Mount,No,Yes;",
    "-;",
 	"O7,Aspect ratio,4:3,16:9;",
-	"O2,TV Mode,PAL,NTSC;",
 	"O34,Stereo mix,none,25%,50%,100%;",
 	"O56,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"-;",
 	"OD,Joysticks Swap,No,Yes;",
 	"-;",
+	"O8,RAM Memory,2 MB,1 Mb;", 
 	"TF,Soft Reset;",
 	"T0,Hard Reset;",
 	"R0,Reset and close OSD;",
-	//"J,Fire 1,Fire 2;",
 	"J1,B,C,A,Start,Y,Z,X;",
 	"V,v",`BUILD_DATE 
 };
@@ -309,12 +304,6 @@ always @(posedge clk_sys) begin
 end
 
 
-//reg   [7:0] ram[409600];   // 400 KB 
-//always @(posedge clk_sys) begin
-//	if(reset) ram[clr_addr[17:0]] <= '1;                // re-initialize memory 
-//	else if(ram_we & ram_cs) ram[ram_addr] <= ram_din;  // write data to BRAM memory
-//end
-//always @(posedge clk_sys) ram_dout <= ram[ram_addr];   // read data from BRAM memory
 
 //////////////////////////////////////////////////////////////////
 
@@ -327,6 +316,7 @@ ZXNEXT_Mister  ZXNEXT_Mister
  .CLK_56              (CLK_56),
  
  .LED                 (LED_USER),
+ .MEMORY              (status[8]),
  
  .SRAM_A   				(SRAM_A),
  .SRAM_DQ  				(SRAM_DQ),
@@ -364,8 +354,10 @@ ZXNEXT_Mister  ZXNEXT_Mister
  .soft_reset          (status[15]),
  
  .pal_mode            (!status[2]),
- .scandouble          (1'b1),
  
+ .scandouble          (1'b1),
+ .esp_rx_i            (UART_RXD),
+ .esp_tx_o            (UART_TXD),
  .rgb_r_o             (rgb_r),
  .rgb_g_o             (rgb_g),
  .rgb_b_o             (rgb_b),
@@ -379,7 +371,6 @@ ZXNEXT_Mister  ZXNEXT_Mister
 ///////////////////////////////////////////////////
 
 assign CLK_VIDEO = clk_sys;
-//assign CE_PIXEL = 1;
 
 wire [2:0] scale = status[6:5];
 wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;

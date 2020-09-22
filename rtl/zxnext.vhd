@@ -3082,29 +3082,24 @@ begin
    port_133b_dat <= "00000" & port_133b_dat_20;
    
    -- fifo memory, share a single bram unit
-   -- Desactivo por no caber en la bram
+   
 	
---   uart_fifo_rx: entity work.tdpram
---   generic map 
---   (
---      addr_width_g  => 10,
---      data_width_g  => 8
---   )
---   port map 
---   (
---      -- uart 0
---      clk_a_i  => i_CLK_28,
---      we_a_i   => uart0_fifo_we,
---      addr_a_i => '0' & uart0_fifo_addr,
---      data_a_i => uart0_rx_byte_dly,
---      data_a_o => uart0_rx_o,
---      -- uart 1
---      clk_b_i  => i_CLK_28,
---      we_b_i   => uart1_fifo_we,
---      addr_b_i => '1' & uart1_fifo_addr,
---      data_b_i => uart1_rx_byte_dly,
---      data_b_o => uart1_rx_o
---   );
+   uart_fifo_rx: entity work.tdpram
+   
+   port map 
+   (
+	   clock  => i_CLK_28,
+      -- uart 0
+      wren_a    => uart0_fifo_we,
+      address_a => '0' & uart0_fifo_addr,
+      data_a    => uart0_rx_byte_dly,
+      q_a       => uart0_rx_o,
+      -- uart 1
+      wren_b    => uart1_fifo_we,
+      address_b => '1' & uart1_fifo_addr,
+      data_b    => uart1_rx_byte_dly,
+      q_b       => uart1_rx_o
+   );
 
    -- cpu read has priority over uart write
    
@@ -3168,11 +3163,11 @@ begin
                port_143b_dat <= uart0_rx_o;
             end if;
          else
-            if uart1_fifo_empty = '1' then
+            --if uart1_fifo_empty = '1' then
                port_143b_dat <= (others => '0');
-            else
-               port_143b_dat <= uart1_rx_o;
-            end if;
+            --else
+             --  port_143b_dat <= uart1_rx_o;--rampa
+            --end if;
          end if;
       end if;
    end process;

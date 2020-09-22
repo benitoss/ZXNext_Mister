@@ -38,7 +38,7 @@ entity ZXNEXT_Mister is
 	
       g_machine_id      : unsigned(7 downto 0)  := X"DA";   -- Mister Version 
       g_version         : unsigned(7 downto 0)  := X"31";   -- 3.01
-      g_sub_version     : unsigned(7 downto 0)  := X"07"    -- .07
+      g_sub_version     : unsigned(7 downto 0)  := X"07"    -- .09
    );
    port (
       -- Clocks
@@ -51,6 +51,8 @@ entity ZXNEXT_Mister is
 		CLK_56            : in    std_logic;
 
 		LED					: out   std_logic                      := '1';
+		
+		MEMORY            : in    std_logic;
 		
 		
 --		ram_addr				: out   std_logic_vector(20 downto 0)  := (others => '0');
@@ -160,7 +162,7 @@ entity ZXNEXT_Mister is
 		VBlank				: out   std_logic                      := '1';
 			
 		pal_mode				: in    std_logic                      := '0';
-		scandouble			: in    std_logic                      := '1'
+		scandouble			: in    std_logic                      := '1';
 --      csync_o           : out   std_logic                      := 'Z'
 
       -- HDMI
@@ -174,8 +176,8 @@ entity ZXNEXT_Mister is
       -- -- ESP
       -- esp_gpio0_io      : inout std_logic                      := 'Z';
       -- esp_gpio2_io      : inout std_logic                      := 'Z';
-      -- esp_rx_i          : in    std_logic;
-      -- esp_tx_o          : out   std_logic                      := '1';
+      esp_rx_i          : in    std_logic;
+      esp_tx_o          : out   std_logic                      := '1'
 
       -- -- PI GPIO
       -- accel_io          : inout std_logic_vector(27 downto 0)  := (others => 'Z');
@@ -721,8 +723,8 @@ architecture rtl of ZXNEXT_Mister is
       --zxdos ESP
    signal    esp_gpio0_io      : std_logic                      := 'Z';
    signal    esp_gpio2_io      : std_logic                      := 'Z';
-   signal    esp_rx_i          : std_logic;
-   signal    esp_tx_o          : std_logic                      := '1';
+   --signal    esp_rx_i          : std_logic;
+   --signal    esp_tx_o          : std_logic                      := '1';
 
       --zxdos PI GPIO
    signal    accel_io          : std_logic_vector(27 downto 0)  := (others => 'Z');
@@ -863,9 +865,7 @@ begin
          esp_rx_i_q <= esp_rx_i_0;
       end if;
    end process;
-    --zxdos ESP ------------------------------------------------
-	 esp_rx_i <= '1'; 
-	 ----------------------------------------------------------
+ 
    -- PI GPIO
 
    process (CLK_28)
@@ -1024,29 +1024,6 @@ begin
    
    expbus_reset <= '1' when bus_reset_db_n_d = '1' and bus_reset_db_n = '0' and zxn_reset_peripheral = '0' and zxn_bus_en = '1' else '0';
 	
-	--zxdos reset -----------------------------
---   btn_reset_n_i <= '1'; 
-   -------------------------------------------
-   
-   ------------------------------------------------------------
-   -- CLOCKS --------------------------------------------------
-   ------------------------------------------------------------
- 
-	
---   clocks_inst : component pll
---	port map (
---	
---			refclk   => CLK_50,             -- 50 Mhz
---			rst      => '0',                -- reset
---			
---			outclk_0 => CLK_28,             -- 28 MHz
---			outclk_1 => CLK_28_n,           -- 28 Mhz inverted
---			outclk_2 => CLK_14,             -- 14 MHz
---			outclk_3 => CLK_7,              -- 7 MHz
---			outclk_4 => CLK_56,             -- 28 * 2		
---			locked   => pll_locked
---	);
-
    	
    -- cpu clock selection
 
@@ -1240,24 +1217,21 @@ begin
    
    process (zxn_ram_a_req, zxn_ram_b_req, sram_addr)
    begin
-      if (zxn_ram_a_req = '1' or zxn_ram_b_req = '1') then
-		      -- 512 Kb 
---       	case sram_addr(19) is
---            when '0'   =>  sram_cs_n <= '0';
---            when others =>  sram_cs_n <= '1';
---         end case; 
-
-			
-			
-            -- 2 MB
+      if ((zxn_ram_a_req = '1' or zxn_ram_b_req = '1') and MEMORY = '1' ) then
+		      -- 1 MB
+       	case sram_addr(20) is
+            when '0'   =>  sram_cs_n <= '0';
+            when others =>  sram_cs_n <= '1';
+         end case; 
+      elsif ((zxn_ram_a_req = '1' or zxn_ram_b_req = '1') and MEMORY= '0' ) then
+			 -- 2 MB
           sram_cs_n <= '0';
-
       else
          sram_cs_n <= '1';			
       end if;
 
    end process;
-   
+    
    sram_rd <= (zxn_ram_a_rd or not zxn_ram_a_req) when zxn_ram_b_req = '0' else '1';
    
    -- Memory cycle
