@@ -305,6 +305,10 @@ end
 
 
 
+
+reg memory_size = 0;
+always @(posedge clk_sys) if(reset) memory_size <= status[8];
+
 //////////////////////////////////////////////////////////////////
 
 ZXNEXT_Mister  ZXNEXT_Mister
@@ -316,7 +320,7 @@ ZXNEXT_Mister  ZXNEXT_Mister
  .CLK_56              (CLK_56),
  
  .LED                 (LED_USER),
- .MEMORY              (status[8]),
+ .MEMORY              (memory_size),
  
  .SRAM_A   				(SRAM_A),
  .SRAM_DQ  				(SRAM_DQ),
@@ -479,7 +483,7 @@ wire tape_adc, tape_adc_act;
 
 assign tape_in = tape_adc_act & tape_adc;
 
-ltc2308_tape ltc2308_tape
+ltc2308_tape #(.CLK_RATE(28000000)) ltc2308_tape
 (
   .clk(clk_sys),
   .ADC_BUS(ADC_BUS),

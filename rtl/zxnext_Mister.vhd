@@ -38,7 +38,7 @@ entity ZXNEXT_Mister is
 	
       g_machine_id      : unsigned(7 downto 0)  := X"DA";   -- Mister Version 
       g_version         : unsigned(7 downto 0)  := X"31";   -- 3.01
-      g_sub_version     : unsigned(7 downto 0)  := X"07"    -- .09
+      g_sub_version     : unsigned(7 downto 0)  := X"09"    -- .09
    );
    port (
       -- Clocks
@@ -177,7 +177,7 @@ entity ZXNEXT_Mister is
       -- esp_gpio0_io      : inout std_logic                      := 'Z';
       -- esp_gpio2_io      : inout std_logic                      := 'Z';
       esp_rx_i          : in    std_logic;
-      esp_tx_o          : out   std_logic                      := '1'
+      esp_tx_o          : out   std_logic                      := 'Z'
 
       -- -- PI GPIO
       -- accel_io          : inout std_logic_vector(27 downto 0)  := (others => 'Z');
@@ -1215,24 +1215,35 @@ begin
 	
    -- Select active sram chip
    
-   process (zxn_ram_a_req, zxn_ram_b_req, sram_addr)
-   begin
-      if ((zxn_ram_a_req = '1' or zxn_ram_b_req = '1') and MEMORY = '1' ) then
-		      -- 1 MB
-       	case sram_addr(20) is
-            when '0'   =>  sram_cs_n <= '0';
-            when others =>  sram_cs_n <= '1';
-         end case; 
-      elsif ((zxn_ram_a_req = '1' or zxn_ram_b_req = '1') and MEMORY= '0' ) then
-			 -- 2 MB
-          sram_cs_n <= '0';
-      else
-         sram_cs_n <= '1';			
-      end if;
+--   process (zxn_ram_a_req, zxn_ram_b_req, sram_addr)
+--   begin
+--      if ((zxn_ram_a_req = '1' or zxn_ram_b_req = '1') and MEMORY = '1' ) then
+--		      -- 1 MB
+--       	case sram_addr(20) is
+--            when '0'   =>  sram_cs_n <= '0';
+--            when others =>  sram_cs_n <= '1';
+--         end case; 
+--      elsif ((zxn_ram_a_req = '1' or zxn_ram_b_req = '1') and MEMORY= '0' ) then
+--			 -- 2 MB
+--          sram_cs_n <= '0';
+--      else
+--         sram_cs_n <= '1';			
+--      end if;
+--
+--   end process;
 
-   end process;
-    
-   sram_rd <= (zxn_ram_a_rd or not zxn_ram_a_req) when zxn_ram_b_req = '0' else '1';
+    process (zxn_ram_a_req, zxn_ram_b_req, sram_addr)
+    begin
+         if (zxn_ram_a_req = '1' or zxn_ram_b_req = '1') then
+	           sram_cs_n <= '0';
+         else
+              sram_cs_n <= '1';                     
+         end if;
+    end process;
+
+
+
+	 sram_rd <= (zxn_ram_a_rd or not zxn_ram_a_req) when zxn_ram_b_req = '0' else '1';
    
    -- Memory cycle
    

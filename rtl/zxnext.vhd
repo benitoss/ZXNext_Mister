@@ -2993,24 +2993,24 @@ begin
       RX_byte_o            => uart1_rx_byte                    -- incoming byte
    );
 
-   fifop_uart1_rx: entity work.fifop
-   generic map (
-      DEPTH_BITS  => 9
-   )
-   port map (
-      clock_i     => i_CLK_28,
-      reset_i     => reset,
-      
-      empty_o     => uart1_fifo_empty,
-      full_o      => uart1_fifo_full,
-      
-      rd_i        => port_143b_rd and uart_153b_select,    -- read address adjusted on falling edge if not empty
-      raddr_o     => uart1_fifo_raddr,
-      
-      wr_i        => uart1_fifo_we,                        -- write address adjusted on falling edge if not full
-      waddr_o     => uart1_fifo_waddr
-   );
-   
+--   fifop_uart1_rx: entity work.fifop
+--   generic map (
+--      DEPTH_BITS  => 9
+--   )
+--   port map (
+--      clock_i     => i_CLK_28,
+--      reset_i     => reset,
+--      
+--      empty_o     => uart1_fifo_empty,
+--      full_o      => uart1_fifo_full,
+--      
+--      rd_i        => port_143b_rd and uart_153b_select,    -- read address adjusted on falling edge if not empty
+--      raddr_o     => uart1_fifo_raddr,
+--      
+--      wr_i        => uart1_fifo_we,                        -- write address adjusted on falling edge if not full
+--      waddr_o     => uart1_fifo_waddr
+--   );
+--   
    -- settings & status
    
    process (i_CLK_28)
@@ -3163,11 +3163,11 @@ begin
                port_143b_dat <= uart0_rx_o;
             end if;
          else
-            --if uart1_fifo_empty = '1' then
+            if uart1_fifo_empty = '1' then
                port_143b_dat <= (others => '0');
-            --else
-             --  port_143b_dat <= uart1_rx_o;--rampa
-            --end if;
+            else
+               port_143b_dat <= uart1_rx_o;--rampa
+            end if;
          end if;
       end if;
    end process;
